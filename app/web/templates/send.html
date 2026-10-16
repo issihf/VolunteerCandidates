@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}הודעה ל{{ c.full_name }} · {{ app_title }}{% endblock %}
+{% block content %}
+<p><a href="/candidates/{{ c.id }}">→ חזרה ל{{ c.full_name }}</a></p>
+<h1>{{ t.name }} · {{ 'ווטסאפ' if t.channel == 'whatsapp' else 'מייל' }}</h1>
+
+{% if variants|length > 1 %}
+<form method="get" class="inline">
+  <div class="field"><label for="v">נוסח</label>
+    <select id="v" name="v" onchange="this.form.submit()">{% for k, label in variants %}<option value="{{ k }}" {{ 'selected' if k == variant }}>{{ label }}</option>{% endfor %}</select></div>
+  <noscript><button type="submit" class="secondary">החלפה</button></noscript>
+</form>
+{% if gender_missing %}<p class="hint">לא סומן מגדר, ולכן נבחר הנוסח הניטרלי. אפשר לסמן מגדר בדף המועמד/ת.</p>{% endif %}
+{% endif %}
+
+{% if problem %}<div class="flash error" role="alert">{{ problem }}{% if 'שם_פונה' in problem %} אפשר להגדיר את השם ב<a href="/settings">הגדרות</a>.{% endif %}</div>{% endif %}
+
+<section class="panel">
+  {% if t.channel == 'email' %}<p><b>אל:</b> <span dir="ltr">{{ target }}</span></p><p><b>נושא:</b> {{ subject }}</p>{% else %}<p><b>אל:</b> <span dir="ltr">{{ target }}</span></p>{% endif %}
+  <textarea id="msg" readonly rows="10">{{ text }}</textarea>
+  <div class="actions">
+    {% if not problem %}
+      {% if t.channel == 'whatsapp' %}
+        <a class="button" href="{{ link }}" target="_blank" rel="noopener">פתיחה בווטסאפ</a>
+      {% elif drafter_ok %}
+        <form action="/candidates/{{ c.id }}/send/{{ t.id }}/draft" method="post" class="inline"><input type="hidden" name="v" value="{{ variant }}"><button type="submit">פתיחת טיוטה ב-Outlook</button></form>
+      {% else %}<span class="hint">Outlook לא זמין כאן. אפשר להעתיק ולשלוח ידנית.</span>{% endif %}
+      <button type="button" class="secondary" onclick="navigator.clipboard.writeText(document.getElementById('msg').value)">העתקת הטקסט</button>
+    {% endif %}
+  </div>
+</section>
+
+{% if not problem %}
+<section class="panel">
+  <h2>אחרי השליחה</h2>
+  <form class="stack" action="/candidates/{{ c.id }}/send/{{ t.id }}/sent" method="post">
+    <div class="field"><label for="on">תאריך</label><input id="on" type="date" name="on" max="{{ today().isoformat() }}"></div>
+    <label><input type="checkbox" name="advance" value="1" checked> לקדם סטטוס אוטומטית (אם מדובר בפנייה ראשונה בווטסאפ)</label>
+    <div><button type="submit">נשלחה, לתעד ביומן</button> <a class="button secondary" href="/candidates/{{ c.id }}">לא נשלחה</a></div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

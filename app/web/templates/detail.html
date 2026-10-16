@@ -96,6 +96,16 @@
   </section>
 </div>
 
+<section class="panel">
+  <h2>שליחת הודעה</h2>
+  {% if templates %}
+  <p class="hint">בחירת תבנית פותחת תצוגה מקדימה. שום דבר לא נשלח מכאן אוטומטית.</p>
+  <ul class="tpl-list">
+    {% for t in templates %}<li><a class="button secondary" href="/candidates/{{ c.id }}/send/{{ t.id }}">{{ t.name }} · {{ 'ווטסאפ' if t.channel == 'whatsapp' else 'מייל' }}</a></li>{% endfor %}
+  </ul>
+  {% else %}<p class="hint">עוד אין תבניות. אפשר להגדיר אותן ב<a href="/settings">הגדרות</a>.</p>{% endif %}
+</section>
+
 <dl class="facts">
   <dt>טלפון נייד</dt><dd dir="ltr">{{ c.display_mobile }}{% if whatsapp %} <a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">ווטסאפ</a>{% endif %}</dd>
   <dt>טלפון עבודה</dt><dd dir="ltr">{{ c.phone_work }}</dd>

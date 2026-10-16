@@ -141,3 +141,25 @@ class JournalEntry(Base):
 
     candidate: Mapped[Candidate] = relationship(back_populates="journal")
     status: Mapped[Status | None] = relationship()
+
+
+TEMPLATE_CHANNELS = {"whatsapp": "ווטסאפ", "email": "מייל"}
+
+
+class MessageTemplate(Base):
+    """A message written by the manager in the settings. Three wordings of the same message:
+    neutral, male and female. The system has no built-in wording."""
+    __tablename__ = "message_template"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    channel: Mapped[str] = mapped_column(String(10), default="whatsapp")  # whatsapp | email
+    subject: Mapped[str] = mapped_column(Text, default="")                 # email only
+    body_neutral: Mapped[str] = mapped_column(Text, default="")
+    body_male: Mapped[str] = mapped_column(Text, default="")
+    body_female: Mapped[str] = mapped_column(Text, default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    def body_for(self, variant: str) -> str:
+        return {"male": self.body_male, "female": self.body_female}.get(variant, self.body_neutral) or ""

@@ -1,5 +1,51 @@
 {% extends "base.html" %}
-{% block title %}הגדרות · {{ app_title }}{% endblock %}
+{% block title %}הגדרות · {{ app_title }}
+<section class="panel">
+  <h2>הודעות</h2>
+  <form class="inline" action="/settings/messaging" method="post">
+    <div class="field"><label for="sn">שם הפונה מפעמונים (למשתנה {{ '{{שם_פונה}}' }})</label>
+      <input id="sn" type="text" name="sender_name" value="{{ sender_name }}" maxlength="80"></div>
+    <div class="field"><label for="ls">סוג קישור לווטסאפ</label>
+      <select id="ls" name="link_style">{% for k, label in link_styles.items() %}<option value="{{ k }}" {{ 'selected' if k == link_style }}>{{ label }}</option>{% endfor %}</select></div>
+    <button type="submit">שמירה</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>תבניות הודעות</h2>
+  <p class="hint">כל תבנית יכולה לכלול שלושה נוסחים: ניטרלי, לשון זכר ולשון נקבה (לפחות אחד). נוסח לפי המגדר שסומן אצל המועמד/ת; אם לא סומן, משתמשים בניטרלי. משתנים:
+    {% for k, d in variables.items() %}<code dir="ltr">{{ '{{' }}{{ k }}{{ '}}' }}</code> – {{ d }}{{ '; ' if not loop.last }}{% endfor %}.
+    המערכת לא מכילה נוסחים מובנים.</p>
+  {% for t in msg_templates %}
+  <details class="tpl">
+    <summary>{{ t.name }} · {{ template_channels[t.channel] }}{{ '' if t.enabled else ' (מושבתת)' }}</summary>
+    <form class="stack" action="/settings/templates/{{ t.id }}" method="post">
+      <div class="field"><label>שם</label><input type="text" name="name" value="{{ t.name }}" required></div>
+      <div class="field"><label>ערוץ</label><select name="channel">{% for k, label in template_channels.items() %}<option value="{{ k }}" {{ 'selected' if k == t.channel }}>{{ label }}</option>{% endfor %}</select></div>
+      <div class="field"><label>נושא (מייל בלבד)</label><input type="text" name="subject" value="{{ t.subject }}"></div>
+      <div class="field"><label>נוסח ניטרלי</label><textarea name="body_neutral" rows="5">{{ t.body_neutral }}</textarea></div>
+      <div class="field"><label>נוסח לשון זכר</label><textarea name="body_male" rows="5">{{ t.body_male }}</textarea></div>
+      <div class="field"><label>נוסח לשון נקבה</label><textarea name="body_female" rows="5">{{ t.body_female }}</textarea></div>
+      <label><input type="checkbox" name="enabled" value="1" {{ 'checked' if t.enabled }}> פעילה</label>
+      <div><button type="submit">שמירה</button></div>
+    </form>
+    <form action="/settings/templates/{{ t.id }}/delete" method="post" onsubmit="return confirm('למחוק את התבנית?')"><button class="mini secondary" type="submit">מחיקה</button></form>
+  </details>
+  {% else %}<p class="hint">עוד אין תבניות.</p>{% endfor %}
+  <details class="tpl" {{ 'open' if not msg_templates }}>
+    <summary>תבנית חדשה</summary>
+    <form class="stack" action="/settings/templates/add" method="post">
+      <div class="field"><label>שם</label><input type="text" name="name" required></div>
+      <div class="field"><label>ערוץ</label><select name="channel">{% for k, label in template_channels.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></div>
+      <div class="field"><label>נושא (מייל בלבד)</label><input type="text" name="subject"></div>
+      <div class="field"><label>נוסח ניטרלי</label><textarea name="body_neutral" rows="5"></textarea></div>
+      <div class="field"><label>נוסח לשון זכר</label><textarea name="body_male" rows="5"></textarea></div>
+      <div class="field"><label>נוסח לשון נקבה</label><textarea name="body_female" rows="5"></textarea></div>
+      <div><button type="submit">הוספה</button></div>
+    </form>
+  </details>
+</section>
+{% endblock %}
 {% block content %}
 <h1>הגדרות</h1>
 
@@ -45,5 +91,51 @@
       <input id="dd" type="number" name="days" min="1" max="365" value="{{ default_days }}"></div>
     <button type="submit" class="secondary">עדכון</button>
   </form>
+</section>
+
+<section class="panel">
+  <h2>הודעות</h2>
+  <form class="inline" action="/settings/messaging" method="post">
+    <div class="field"><label for="sn">שם הפונה מפעמונים (למשתנה {{ '{{שם_פונה}}' }})</label>
+      <input id="sn" type="text" name="sender_name" value="{{ sender_name }}" maxlength="80"></div>
+    <div class="field"><label for="ls">סוג קישור לווטסאפ</label>
+      <select id="ls" name="link_style">{% for k, label in link_styles.items() %}<option value="{{ k }}" {{ 'selected' if k == link_style }}>{{ label }}</option>{% endfor %}</select></div>
+    <button type="submit">שמירה</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>תבניות הודעות</h2>
+  <p class="hint">כל תבנית יכולה לכלול שלושה נוסחים: ניטרלי, לשון זכר ולשון נקבה (לפחות אחד). נוסח לפי המגדר שסומן אצל המועמד/ת; אם לא סומן, משתמשים בניטרלי. משתנים:
+    {% for k, d in variables.items() %}<code dir="ltr">{{ '{{' }}{{ k }}{{ '}}' }}</code> – {{ d }}{{ '; ' if not loop.last }}{% endfor %}.
+    המערכת לא מכילה נוסחים מובנים.</p>
+  {% for t in msg_templates %}
+  <details class="tpl">
+    <summary>{{ t.name }} · {{ template_channels[t.channel] }}{{ '' if t.enabled else ' (מושבתת)' }}</summary>
+    <form class="stack" action="/settings/templates/{{ t.id }}" method="post">
+      <div class="field"><label>שם</label><input type="text" name="name" value="{{ t.name }}" required></div>
+      <div class="field"><label>ערוץ</label><select name="channel">{% for k, label in template_channels.items() %}<option value="{{ k }}" {{ 'selected' if k == t.channel }}>{{ label }}</option>{% endfor %}</select></div>
+      <div class="field"><label>נושא (מייל בלבד)</label><input type="text" name="subject" value="{{ t.subject }}"></div>
+      <div class="field"><label>נוסח ניטרלי</label><textarea name="body_neutral" rows="5">{{ t.body_neutral }}</textarea></div>
+      <div class="field"><label>נוסח לשון זכר</label><textarea name="body_male" rows="5">{{ t.body_male }}</textarea></div>
+      <div class="field"><label>נוסח לשון נקבה</label><textarea name="body_female" rows="5">{{ t.body_female }}</textarea></div>
+      <label><input type="checkbox" name="enabled" value="1" {{ 'checked' if t.enabled }}> פעילה</label>
+      <div><button type="submit">שמירה</button></div>
+    </form>
+    <form action="/settings/templates/{{ t.id }}/delete" method="post" onsubmit="return confirm('למחוק את התבנית?')"><button class="mini secondary" type="submit">מחיקה</button></form>
+  </details>
+  {% else %}<p class="hint">עוד אין תבניות.</p>{% endfor %}
+  <details class="tpl" {{ 'open' if not msg_templates }}>
+    <summary>תבנית חדשה</summary>
+    <form class="stack" action="/settings/templates/add" method="post">
+      <div class="field"><label>שם</label><input type="text" name="name" required></div>
+      <div class="field"><label>ערוץ</label><select name="channel">{% for k, label in template_channels.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></div>
+      <div class="field"><label>נושא (מייל בלבד)</label><input type="text" name="subject"></div>
+      <div class="field"><label>נוסח ניטרלי</label><textarea name="body_neutral" rows="5"></textarea></div>
+      <div class="field"><label>נוסח לשון זכר</label><textarea name="body_male" rows="5"></textarea></div>
+      <div class="field"><label>נוסח לשון נקבה</label><textarea name="body_female" rows="5"></textarea></div>
+      <div><button type="submit">הוספה</button></div>
+    </form>
+  </details>
 </section>
 {% endblock %}

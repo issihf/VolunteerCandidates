@@ -21,6 +21,8 @@ from app.actions import settings as cfg
 from app.domain.dates import format_date, today_il
 from app.domain.phones import best_whatsapp_number
 from app.importer import apply
+from app.messaging import fill as mfill
+from app.messaging.outlook import Drafter, MailError, default_drafter
 from app.importer.list_import import import_list
 from app.storage import models as m
 from app.storage.db import get_default_follow_up_days, init_db, make_engine, session_factory
@@ -38,7 +40,8 @@ MAX_UPLOAD = 20 * 1024 * 1024
 COOKIE = "vc_key"
 
 
-def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: str | None = None) -> FastAPI:
+def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: str | None = None,
+               drafter: Drafter | None = None) -> FastAPI:
     engine = engine or make_engine()
     init_db(engine)
     sessions = session_factory(engine)
@@ -51,6 +54,7 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
     app.state.sessions = sessions
     app.state.job = FetchJob(sessions, fetcher_factory)
     app.state.token = token
+    app.state.drafter = drafter or default_drafter()
     templates = Jinja2Templates(directory=str(HERE / "templates"))
     templates.env.globals.update(app_title=APP_TITLE, version=__version__, base_url=PAAMONIM_BASE_URL,
                                  fmt_date=format_date, today=today_il)
@@ -167,6 +171,7 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
             for e in journal:
                 _ = e.status
             ctx = {"c": cand, "whatsapp": wa, "state_names": dict(TABS), "flash": flash, "err": bool(err),
+                   "templates": [t for t in cfg.ordered_templates(session) if t.enabled],
                    "status_options": options, "journal": journal, "channels": m.CHANNELS,
                    "kind_names": {m.J_STATUS: "סטטוס", m.J_NOTE: "הערה", m.J_OUT: "פנינו", m.J_IN: "התקבלה תשובה"}}
         return templates.TemplateResponse(request, "detail.html", ctx)
@@ -275,7 +280,12 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
             rows = cfg.ordered_statuses(session)
             used = dict(session.execute(select(m.Candidate.status_id, func.count()).group_by(m.Candidate.status_id)).all())
             ctx = {"statuses": rows, "used": used, "flash": flash, "err": bool(err),
-                   "default_days": get_default_follow_up_days(session)}
+                   "default_days": get_default_follow_up_days(session),
+                   "msg_templates": cfg.ordered_templates(session),
+                   "sender_name": cfg.get_setting(session, "sender_name"),
+                   "link_style": cfg.get_setting(session, "whatsapp_link_style", "api"),
+                   "link_styles": mfill.LINK_STYLES, "template_channels": m.TEMPLATE_CHANNELS,
+                   "variables": mfill.VARIABLE_HELP}
         return templates.TemplateResponse(request, "settings.html", ctx)
 
     @app.post("/settings/status/{sid}")
@@ -296,5 +306,107 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
     @app.post("/settings/default-days")
     def post_default_days(days: str = Form("")):  # noqa: ANN202
         return settings_do(lambda session: (cfg.set_default_days(session, days), "ברירת המחדל עודכנה")[1])
+
+    # ------------------------------------------------------- message templates (settings)
+    @app.post("/settings/messaging")
+    def post_messaging(sender_name: str = Form(""), link_style: str = Form("api")):  # noqa: ANN202
+        return settings_do(lambda session: (cfg.set_messaging(session, sender_name, link_style), "ההגדרות נשמרו")[1])
+
+    @app.post("/settings/templates/add")
+    def post_template_add(name: str = Form(""), channel: str = Form("whatsapp"), subject: str = Form(""),
+                          body_neutral: str = Form(""), body_male: str = Form(""), body_female: str = Form(""),
+                          enabled: str = Form("1")):  # noqa: ANN202
+        return settings_do(lambda session: (cfg.add_template(
+            session, name=name, channel=channel, subject=subject, neutral=body_neutral, male=body_male,
+            female=body_female, enabled=bool(enabled)), "התבנית נוספה")[1])
+
+    @app.post("/settings/templates/{tid}")
+    def post_template_update(tid: int, name: str = Form(""), channel: str = Form("whatsapp"), subject: str = Form(""),
+                             body_neutral: str = Form(""), body_male: str = Form(""), body_female: str = Form(""),
+                             enabled: str = Form("")):  # noqa: ANN202
+        return settings_do(lambda session: (cfg.update_template(
+            session, tid, name=name, channel=channel, subject=subject, neutral=body_neutral, male=body_male,
+            female=body_female, enabled=bool(enabled)), "התבנית נשמרה")[1])
+
+    @app.post("/settings/templates/{tid}/delete")
+    def post_template_delete(tid: int):  # noqa: ANN202
+        return settings_do(lambda session: (cfg.delete_template(session, tid), "התבנית נמחקה")[1])
+
+    # --------------------------------------------------------------- preparing a message
+    def prepare(session: Session, cand: m.Candidate, tpl: m.MessageTemplate, variant: str) -> dict:
+        """Everything the preview shows. Problems are returned as `problem`, not raised."""
+        sender = cfg.get_setting(session, "sender_name")
+        values = mfill.candidate_values(cand.first_name, cand.last_name, sender)
+        available = [(k, label) for k, label in (("neutral", "ניטרלי"), ("male", "לשון זכר"), ("female", "לשון נקבה"))
+                     if tpl.body_for(k).strip()]
+        keys = [k for k, _ in available]
+        preferred = cand.gender if cand.gender in keys else "neutral"
+        chosen = variant if variant in keys else (preferred if preferred in keys else (keys[0] if keys else "neutral"))
+        subject = mfill.fill_text(tpl.subject, values) if tpl.channel == "email" else ""
+        text = mfill.fill_text(tpl.body_for(chosen), values)
+        left = list(dict.fromkeys(mfill.leftovers(subject) + mfill.leftovers(text)))
+        problem, link, target = "", "", ""
+        if left:
+            problem = mfill.missing_message(left)
+        elif tpl.channel == "whatsapp":
+            number = best_whatsapp_number(cand.phone_mobile, cand.list_mobile, cand.phone_work,
+                                          cand.phone_work_direct, cand.phone_home)
+            if not number:
+                problem = "אין למועמד/ת מספר נייד לוואטסאפ."
+            else:
+                target = number
+                link = mfill.whatsapp_link(number, text, cfg.get_setting(session, "whatsapp_link_style", "api"))
+        else:
+            target = cand.display_email
+            if not target:
+                problem = "אין למועמד/ת כתובת מייל."
+        return {"c": cand, "t": tpl, "variants": available, "variant": chosen, "subject": subject, "text": text,
+                "problem": problem, "link": link, "target": target,
+                "gender_missing": cand.gender not in ("male", "female") and len(keys) > 1}
+
+    def load_pair(session: Session, cid: int, tid: int):  # noqa: ANN202
+        cand, tpl = session.get(m.Candidate, cid), session.get(m.MessageTemplate, tid)
+        if cand is None or tpl is None:
+            raise HTTPException(404)
+        return cand, tpl
+
+    @app.get("/candidates/{cid}/send/{tid}", response_class=HTMLResponse)
+    def send_preview(request: Request, cid: int, tid: int, v: str = "", flash: str = "", err: str = ""):  # noqa: ANN202
+        with db() as session:
+            cand, tpl = load_pair(session, cid, tid)
+            ctx = prepare(session, cand, tpl, v)
+            ctx.update(flash=flash, err=bool(err), channels=m.CHANNELS, drafter_ok=app.state.drafter.available)
+        return templates.TemplateResponse(request, "send.html", ctx)
+
+    @app.post("/candidates/{cid}/send/{tid}/draft")
+    def send_draft(cid: int, tid: int, v: str = Form("")):  # noqa: ANN202
+        with db() as session:
+            cand, tpl = load_pair(session, cid, tid)
+            ctx = prepare(session, cand, tpl, v)
+            back = f"/candidates/{cid}/send/{tid}?v={ctx['variant']}"
+            if ctx["problem"] or tpl.channel != "email":
+                return RedirectResponse(back + "&err=1&flash=" + quote(ctx["problem"] or "התבנית אינה תבנית מייל"),
+                                        status_code=303)
+            try:
+                app.state.drafter.open_text_draft(tpl.subject, tpl.body_for(ctx["variant"]), [ctx["target"]],
+                                                  mfill.candidate_values(cand.first_name, cand.last_name,
+                                                                         cfg.get_setting(session, "sender_name")))
+            except MailError as exc:
+                return RedirectResponse(back + "&err=1&flash=" + quote(exc.message), status_code=303)
+        return RedirectResponse(back + "&flash=" + quote("הטיוטה נפתחה ב-Outlook. אחרי השליחה אפשר לתעד כאן שנשלחה."),
+                                status_code=303)
+
+    @app.post("/candidates/{cid}/send/{tid}/sent")
+    def send_sent(cid: int, tid: int, on: str = Form(""), advance: str = Form("")):  # noqa: ANN202
+        with db() as session:
+            cand, tpl = load_pair(session, cid, tid)
+            try:
+                message = act.log_contact(session, cand, m.J_OUT, tpl.channel, on=parse_date(on),
+                                          text=f"תבנית: {tpl.name}", advance=bool(advance))
+                session.commit()
+            except act.UserError as exc:
+                session.rollback()
+                return RedirectResponse(f"/candidates/{cid}/send/{tid}?err=1&flash=" + quote(str(exc)), status_code=303)
+        return RedirectResponse(f"/candidates/{cid}?flash=" + quote(message), status_code=303)
 
     return app

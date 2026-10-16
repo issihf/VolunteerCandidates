@@ -59,3 +59,10 @@ table.grid input[type=text], table.grid input[type=number] { width:100%; }
 table.grid td.num input { width:5.5em; }
 .mini { padding:4px 10px; font-size:.9rem; }
 .tag { font-size:.8rem; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 8px; }
+
+.actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+.tpl-list { list-style:none; padding:0; margin:0; display:flex; gap:8px; flex-wrap:wrap; }
+details.tpl { border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin-bottom:8px; }
+details.tpl summary { cursor:pointer; font-weight:600; }
+details.tpl form { margin-top:10px; }
+code { background:#eef1f5; padding:1px 5px; border-radius:4px; }
