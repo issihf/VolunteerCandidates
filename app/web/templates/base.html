@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ app_title }}{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/candidates">{{ app_title }}</a>
+  <span class="ver">גרסה {{ version }}</span>
+</header>
+<main>
+{% if flash is defined and flash %}<div class="flash" role="status">{{ flash }}</div>{% endif %}
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

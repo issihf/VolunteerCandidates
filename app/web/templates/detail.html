@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ c.full_name }} · {{ app_title }}{% endblock %}
+{% block content %}
+<p><a href="/candidates?tab={{ c.state }}">← חזרה לרשימה</a></p>
+<h1>{{ c.full_name or ('#' ~ c.show_id) }}</h1>
+<p class="badges"><span class="badge">{{ state_names.get(c.state, c.state) }}</span>
+  {% if c.state_reason %}<span class="hint">{{ c.state_reason }}</span>{% endif %}</p>
+
+<section class="panel row">
+  <a class="button" href="{{ base_url }}/contacts/show/{{ c.show_id }}" target="_blank" rel="noopener">פתיחה בפעמונים</a>
+  <form action="/candidates/{{ c.id }}/refetch" method="post"><button type="submit" class="secondary">רענון פרטים מפעמונים</button></form>
+  {% if c.state in ('review', 'failed', 'not_relevant') %}
+    <form action="/candidates/{{ c.id }}/resolve" method="post"><input type="hidden" name="to" value="candidate"><button type="submit">סימון כמועמד</button></form>
+  {% endif %}
+  {% if c.state in ('review', 'candidate') %}
+    <form action="/candidates/{{ c.id }}/resolve" method="post"><input type="hidden" name="to" value="not_relevant"><button type="submit" class="secondary">סימון כלא רלוונטי</button></form>
+  {% endif %}
+</section>
+
+<dl class="facts">
+  <dt>שם פרטי</dt><dd>{{ c.first_name }}</dd>
+  <dt>שם משפחה</dt><dd>{{ c.last_name }}</dd>
+  <dt>טלפון נייד</dt><dd dir="ltr">{{ c.display_mobile }}{% if whatsapp %} <a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">ווטסאפ</a>{% endif %}</dd>
+  <dt>טלפון עבודה</dt><dd dir="ltr">{{ c.phone_work }}</dd>
+  <dt>טלפון עבודה ישיר</dt><dd dir="ltr">{{ c.phone_work_direct }}</dd>
+  <dt>טלפון בית</dt><dd dir="ltr">{{ c.phone_home }}</dd>
+  <dt>דוא"ל</dt><dd dir="ltr">{{ c.display_email }}</dd>
+  <dt>כתובת</dt><dd>{{ c.street }} {{ c.display_city }} {{ c.zip_code }}</dd>
+  <dt>תאריך לידה</dt><dd>{{ fmt_date(c.birth_date) }}</dd>
+  <dt>מקום עבודה</dt><dd>{{ c.workplace }}</dd>
+  <dt>תפקיד בעבודה</dt><dd>{{ c.job_title }}</dd>
+  <dt>שפות</dt><dd>{{ c.languages }}</dd>
+  <dt>אפשרויות סיוע נוספות</dt><dd>{{ c.extra_options }}</dd>
+  <dt>יחידה</dt><dd>{{ c.unit or c.list_unit }}</dd>
+  <dt>סטטוס בפעמונים</dt><dd>{{ c.paamonim_status }}</dd>
+  <dt>תחילת קליטה</dt><dd>{{ fmt_date(c.intake_date) }}</dd>
+  <dt>תחילת פעילות</dt><dd>{{ fmt_date(c.activity_start) }}</dd>
+  {% if c.status %}
+  <dt>סטטוס</dt><dd>{{ c.status.name }}</dd>
+  <dt>תאריך מעקב</dt><dd>{{ fmt_date(c.follow_up_date) }}</dd>
+  {% endif %}
+  <dt>נשלף</dt><dd>{{ c.fetched_at.strftime('%d/%m/%Y %H:%M') if c.fetched_at else 'עדיין לא' }}</dd>
+</dl>
+{% endblock %}

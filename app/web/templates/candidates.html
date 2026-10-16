@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <form class="row" action="/import" method="post" enctype="multipart/form-data">
+    <label for="file">ייבוא רשימת אנשי קשר (קובץ HTML שנשמר מפעמונים)</label>
+    <input id="file" type="file" name="file" accept=".html,.htm" required>
+    <button type="submit">ייבוא</button>
+  </form>
+  <p class="hint">רק מי שעוד לא במערכת נוסף. אחרי הייבוא יש לשלוף את פרטיהם מפעמונים.</p>
+</section>
+
+<section class="panel" id="fetchbox" data-running="{{ 'true' if job.running else 'false' }}">
+  {% if job.running %}
+    <div class="row">
+      <strong>שולף פרטים…</strong>
+      <span id="fetchprogress">{{ job.done }} מתוך {{ job.total }}</span>
+      <form action="/fetch/stop" method="post"><button type="submit" class="secondary">עצירה</button></form>
+    </div>
+    <p id="fetchmsg" class="notice">{{ job.message }}</p>
+  {% else %}
+    <div class="row">
+      <form action="/fetch" method="post"><button type="submit" {% if not pending %}disabled{% endif %}>שליפת פרטים ({{ pending }} ממתינים)</button></form>
+      {% if job.finished %}
+        <span class="done">
+          {% if job.error %}שגיאה: {{ job.error }}{% elif job.stopped == 'login' %}נעצר: לא בוצעה התחברות לפעמונים{% elif job.stopped == 'user' %}נעצר לבקשתך{% else %}הסתיים{% endif %}
+          — מועמדים {{ job.candidate }}, לא רלוונטי {{ job.not_relevant }}, לבדיקה {{ job.review }}, נכשלו {{ job.failed }}
+        </span>
+      {% endif %}
+    </div>
+    <p class="hint">הדפדפן הייעודי נפתח ברקע. בפעם הראשונה (או כשההתחברות פגה) ייפתח חלון להתחברות לפעמונים.</p>
+  {% endif %}
+</section>
+
+<nav class="tabs" aria-label="סינון לפי מצב">
+  {% for key, label in tabs %}
+    <a href="/candidates?tab={{ key }}" class="{{ 'on' if key == tab else '' }}" {% if key == tab %}aria-current="page"{% endif %}>{{ label }} <span class="n">{{ counts[key] }}</span></a>
+  {% endfor %}
+</nav>
+
+<form class="search" action="/candidates" method="get">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="חיפוש לפי שם, טלפון, מייל או ישוב" aria-label="חיפוש">
+  <button type="submit" class="secondary">חיפוש</button>
+</form>
+
+{% if rows %}
+<table class="grid">
+  <thead><tr><th>שם</th><th>טלפון נייד</th><th>ישוב</th><th>דוא"ל</th>
+    {% if tab == 'candidate' %}<th>סטטוס</th><th>מעקב</th>{% else %}<th>הערה</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for c in rows %}
+    <tr>
+      <td><a href="/candidates/{{ c.id }}">{{ c.full_name or ('#' ~ c.show_id) }}</a></td>
+      <td dir="ltr">{{ c.display_mobile }}</td>
+      <td>{{ c.display_city }}</td>
+      <td dir="ltr">{{ c.display_email }}</td>
+      {% if tab == 'candidate' %}
+        <td>{{ c.status.name if c.status else '' }}</td>
+        <td class="{{ 'late' if c.follow_up_date and c.follow_up_date <= today() else '' }}">{{ fmt_date(c.follow_up_date) }}</td>
+      {% else %}
+        <td>{{ c.state_reason }}</td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">אין רשומות כאן.</p>
+{% endif %}
+
+<script>
+(function () {
+  var box = document.getElementById('fetchbox');
+  if (!box || box.dataset.running !== 'true') return;
+  var timer = setInterval(function () {
+    fetch('/fetch/status').then(function (r) { return r.json(); }).then(function (s) {
+      if (!s.running) { clearInterval(timer); location.reload(); return; }
+      document.getElementById('fetchprogress').textContent = s.done + ' מתוך ' + s.total;
+      document.getElementById('fetchmsg').textContent = s.message || '';
+    }).catch(function () {});
+  }, 1500);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+# Real data never goes to git
+*.db
+*.db-journal
+data/
+browser-profile/
+*.xls
+*.xlsx
+*.csv
+*.oft
+# Synthetic test files only (never a page saved from Paamonim)
+!tests/fixtures/
+!tests/fixtures/**
