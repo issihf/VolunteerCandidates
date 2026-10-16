@@ -18,9 +18,9 @@ from tests.test_web import upload
 def test_fill_text_and_leftovers():
     vals = f.candidate_values("דנה", "לוי", "")
     assert f.fill_text("שלום {{שם}} {{ שם_משפחה }}", vals) == "שלום דנה לוי"
-    out = f.fill_text("מאת {{שם_פונה}}", vals)
-    assert f.leftovers(out) == ["שם_פונה"]
-    assert "שם_פונה" in f.missing_message(["שם_פונה"])
+    out = f.fill_text("מאת {{שם_מנהל_מפעמונים}}", vals)
+    assert f.leftovers(out) == ["שם_מנהל_מפעמונים"]
+    assert "שם_מנהל_מפעמונים" in f.missing_message(["שם_מנהל_מפעמונים"])
     assert "לא מוכר" in f.missing_message(["כלום"])
 
 
@@ -48,7 +48,7 @@ def test_fake_drafter_refuses_leftover():
     d.open_text_draft("נושא {{שם}}", "גוף {{שם}}", ["a@b.c"], {"שם": "דנה"})
     assert d.drafts[0]["subject"] == "נושא דנה"
     with pytest.raises(MailError) as e:
-        d.open_text_draft("נושא", "גוף {{שם_פונה}}", ["a@b.c"], {})
+        d.open_text_draft("נושא", "גוף {{שם_מנהל_מפעמונים}}", ["a@b.c"], {})
     assert e.value.kind == "leftover"
 
 
@@ -83,7 +83,7 @@ def env(engine):
 
 
 def add_tpl(c, **kw):
-    data = dict(name="פנייה", channel="whatsapp", subject="", body_neutral="שלום {{שם}}, כאן {{שם_פונה}}",
+    data = dict(name="פנייה", channel="whatsapp", subject="", body_neutral="שלום {{שם}}, כאן {{שם_מנהל_מפעמונים}}",
                 body_male="", body_female="")
     data.update(kw)
     r = c.post("/settings/templates/add", data=data)
@@ -114,7 +114,7 @@ def test_whatsapp_preview_needs_sender_then_works(env):
     t = tid(env)
     url = f"/candidates/{env.cand}/send/{t}"
     page = env.get(url).text
-    assert "שם_פונה" in page and "פתיחה בווטסאפ" not in page  # refused: no sender name
+    assert "שם_מנהל_מפעמונים" in page and "פתיחה בווטסאפ" not in page  # refused: no sender name
     env.post("/settings/messaging", data=dict(sender_name="איסי", link_style="api"))
     page = env.get(url).text
     assert "פתיחה בווטסאפ" in page and "api.whatsapp.com/send?phone=972" in page
@@ -134,7 +134,7 @@ def test_variant_follows_gender(env):
 
 def test_email_draft_and_sent_logging(env):
     env.post("/settings/messaging", data=dict(sender_name="איסי", link_style="api"))
-    add_tpl(env, name="מייל", channel="email", subject="שלום {{שם}}", body_neutral="גוף {{שם_פונה}}")
+    add_tpl(env, name="מייל", channel="email", subject="שלום {{שם}}", body_neutral="גוף {{שם_מנהל_מפעמונים}}")
     t = tid(env)
     r = env.post(f"/candidates/{env.cand}/send/{t}/draft", data={"v": "neutral"})
     assert r.status_code == 303 and "err=1" not in r.headers["location"]
@@ -177,3 +177,20 @@ def test_draft_failure_is_shown(engine):
 def test_detail_lists_templates(env):
     add_tpl(env)
     assert "פנייה" in env.get(f"/candidates/{env.cand}").text
+
+
+def test_old_variable_is_migrated(engine):
+    from sqlalchemy.orm import Session
+    from app.storage.db import ensure_defaults
+    with Session(engine) as s:
+        s.add(m.MessageTemplate(name="ישן", channel="whatsapp", body_neutral="כאן {{שם_פונה}}"))
+        s.commit()
+        ensure_defaults(s)
+        s.commit()
+        assert s.scalars(select(m.MessageTemplate)).one().body_neutral == "כאן {{שם_מנהל_מפעמונים}}"
+
+
+def test_settings_page_has_unsaved_guard(env):
+    page = env.get("/settings").text
+    assert 'id="unsaved"' in page and "שם_מנהל_מפעמונים" in page
+    assert page.count("<section") == 4 and "<section" not in page.split("</title>")[0]

@@ -66,3 +66,7 @@ details.tpl { border:1px solid var(--line); border-radius:8px; padding:8px 12px;
 details.tpl summary { cursor:pointer; font-weight:600; }
 details.tpl form { margin-top:10px; }
 code { background:#eef1f5; padding:1px 5px; border-radius:4px; }
+
+.modal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50; }
+.modal[hidden] { display:none; }
+.modal-box { background:var(--card); border-radius:10px; padding:20px 24px; max-width:460px; width:90%; }

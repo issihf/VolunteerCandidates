@@ -1,12 +1,12 @@
 """Fill message templates. Pure: no Outlook, no database.
 
-Only {{שם}}, {{שם_משפחה}} and {{שם_פונה}} are replaced; the text around them is
+Only {{שם}}, {{שם_משפחה}} and {{שם_מנהל_מפעמונים}} are replaced; the text around them is
 never changed. A variable without a value stays in the text, and the message is
 refused instead of going out with a hole in it.
 
     values = candidate_values("דנה", "לוי", "איסי")
     fill_text("שלום {{שם}}", values)     -> "שלום דנה"
-    leftovers(text)                      -> ["שם_פונה"] when a value was missing
+    leftovers(text)                      -> ["שם_מנהל_מפעמונים"] when a value was missing
 """
 from __future__ import annotations
 
@@ -14,11 +14,11 @@ import html
 import re
 from urllib.parse import quote
 
-VARIABLES = ("שם", "שם_משפחה", "שם_פונה")
+VARIABLES = ("שם", "שם_משפחה", "שם_מנהל_מפעמונים")
 VARIABLE_HELP = {
     "שם": "שם פרטי של המועמד/ת",
     "שם_משפחה": "שם משפחה",
-    "שם_פונה": "שם הפונה מפעמונים (נקבע בהגדרות)",
+    "שם_מנהל_מפעמונים": "שם המנהל/ת מפעמונים (נקבע בהגדרות)",
 }
 _INVISIBLE = "‎‏‪‫‬‭‮⁦⁧⁨⁩﻿"
 _ANY_VAR = re.compile(r"\{\{\s*([^{}]*?)\s*\}\}")
@@ -27,7 +27,7 @@ _ANY_VAR = re.compile(r"\{\{\s*([^{}]*?)\s*\}\}")
 def candidate_values(first_name: str | None, last_name: str | None, sender: str | None) -> dict[str, str]:
     """An empty value is left out, so the variable stays in the text and the message is refused."""
     values = {"שם": (first_name or "").strip(), "שם_משפחה": (last_name or "").strip(),
-              "שם_פונה": (sender or "").strip()}
+              "שם_מנהל_מפעמונים": (sender or "").strip()}
     return {k: v for k, v in values.items() if v}
 
 

@@ -76,6 +76,19 @@ def ensure_defaults(session: Session) -> None:
                            follow_up_days=DEFAULT_FOLLOW_UP_DAYS if follows else None,
                            requires_date=needs_date))
     session.flush()
+    _rename_old_variable(session)
+
+
+def _rename_old_variable(session: Session) -> None:
+    """Templates written in version 0.3.0 used {{שם_פונה}}; it is now {{שם_מנהל_מפעמונים}}."""
+    from sqlalchemy import select as _select
+    from app.storage.models import MessageTemplate
+    for t in session.scalars(_select(MessageTemplate)):
+        for col in ("subject", "body_neutral", "body_male", "body_female"):
+            old = getattr(t, col) or ""
+            if "שם_פונה" in old:
+                setattr(t, col, old.replace("שם_פונה", "שם_מנהל_מפעמונים"))
+    session.flush()
 
 
 def session_factory(engine) -> sessionmaker:

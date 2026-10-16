@@ -1,51 +1,5 @@
 {% extends "base.html" %}
-{% block title %}הגדרות · {{ app_title }}
-<section class="panel">
-  <h2>הודעות</h2>
-  <form class="inline" action="/settings/messaging" method="post">
-    <div class="field"><label for="sn">שם הפונה מפעמונים (למשתנה {{ '{{שם_פונה}}' }})</label>
-      <input id="sn" type="text" name="sender_name" value="{{ sender_name }}" maxlength="80"></div>
-    <div class="field"><label for="ls">סוג קישור לווטסאפ</label>
-      <select id="ls" name="link_style">{% for k, label in link_styles.items() %}<option value="{{ k }}" {{ 'selected' if k == link_style }}>{{ label }}</option>{% endfor %}</select></div>
-    <button type="submit">שמירה</button>
-  </form>
-</section>
-
-<section class="panel">
-  <h2>תבניות הודעות</h2>
-  <p class="hint">כל תבנית יכולה לכלול שלושה נוסחים: ניטרלי, לשון זכר ולשון נקבה (לפחות אחד). נוסח לפי המגדר שסומן אצל המועמד/ת; אם לא סומן, משתמשים בניטרלי. משתנים:
-    {% for k, d in variables.items() %}<code dir="ltr">{{ '{{' }}{{ k }}{{ '}}' }}</code> – {{ d }}{{ '; ' if not loop.last }}{% endfor %}.
-    המערכת לא מכילה נוסחים מובנים.</p>
-  {% for t in msg_templates %}
-  <details class="tpl">
-    <summary>{{ t.name }} · {{ template_channels[t.channel] }}{{ '' if t.enabled else ' (מושבתת)' }}</summary>
-    <form class="stack" action="/settings/templates/{{ t.id }}" method="post">
-      <div class="field"><label>שם</label><input type="text" name="name" value="{{ t.name }}" required></div>
-      <div class="field"><label>ערוץ</label><select name="channel">{% for k, label in template_channels.items() %}<option value="{{ k }}" {{ 'selected' if k == t.channel }}>{{ label }}</option>{% endfor %}</select></div>
-      <div class="field"><label>נושא (מייל בלבד)</label><input type="text" name="subject" value="{{ t.subject }}"></div>
-      <div class="field"><label>נוסח ניטרלי</label><textarea name="body_neutral" rows="5">{{ t.body_neutral }}</textarea></div>
-      <div class="field"><label>נוסח לשון זכר</label><textarea name="body_male" rows="5">{{ t.body_male }}</textarea></div>
-      <div class="field"><label>נוסח לשון נקבה</label><textarea name="body_female" rows="5">{{ t.body_female }}</textarea></div>
-      <label><input type="checkbox" name="enabled" value="1" {{ 'checked' if t.enabled }}> פעילה</label>
-      <div><button type="submit">שמירה</button></div>
-    </form>
-    <form action="/settings/templates/{{ t.id }}/delete" method="post" onsubmit="return confirm('למחוק את התבנית?')"><button class="mini secondary" type="submit">מחיקה</button></form>
-  </details>
-  {% else %}<p class="hint">עוד אין תבניות.</p>{% endfor %}
-  <details class="tpl" {{ 'open' if not msg_templates }}>
-    <summary>תבנית חדשה</summary>
-    <form class="stack" action="/settings/templates/add" method="post">
-      <div class="field"><label>שם</label><input type="text" name="name" required></div>
-      <div class="field"><label>ערוץ</label><select name="channel">{% for k, label in template_channels.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></div>
-      <div class="field"><label>נושא (מייל בלבד)</label><input type="text" name="subject"></div>
-      <div class="field"><label>נוסח ניטרלי</label><textarea name="body_neutral" rows="5"></textarea></div>
-      <div class="field"><label>נוסח לשון זכר</label><textarea name="body_male" rows="5"></textarea></div>
-      <div class="field"><label>נוסח לשון נקבה</label><textarea name="body_female" rows="5"></textarea></div>
-      <div><button type="submit">הוספה</button></div>
-    </form>
-  </details>
-</section>
-{% endblock %}
+{% block title %}הגדרות · {{ app_title }}{% endblock %}
 {% block content %}
 <h1>הגדרות</h1>
 
@@ -96,7 +50,7 @@
 <section class="panel">
   <h2>הודעות</h2>
   <form class="inline" action="/settings/messaging" method="post">
-    <div class="field"><label for="sn">שם הפונה מפעמונים (למשתנה {{ '{{שם_פונה}}' }})</label>
+    <div class="field"><label for="sn">שם המנהל/ת מפעמונים (למשתנה {{ '{{שם_מנהל_מפעמונים}}' }})</label>
       <input id="sn" type="text" name="sender_name" value="{{ sender_name }}" maxlength="80"></div>
     <div class="field"><label for="ls">סוג קישור לווטסאפ</label>
       <select id="ls" name="link_style">{% for k, label in link_styles.items() %}<option value="{{ k }}" {{ 'selected' if k == link_style }}>{{ label }}</option>{% endfor %}</select></div>
@@ -138,4 +92,66 @@
     </form>
   </details>
 </section>
+
+<div id="unsaved" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="unsaved-t">
+  <div class="modal-box">
+    <h2 id="unsaved-t">יש שינויים שלא נשמרו</h2>
+    <p>לשמור אותם לפני שממשיכים?</p>
+    <p id="unsaved-err" class="flash error" hidden role="alert"></p>
+    <div class="actions">
+      <button type="button" id="u-save">שמירה והמשך</button>
+      <button type="button" id="u-discard" class="secondary">המשך בלי לשמור</button>
+      <button type="button" id="u-stay" class="secondary">חזרה להגדרות</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var dirty = new Set(), pending = null, submitting = false;
+  var modal = document.getElementById('unsaved'), errBox = document.getElementById('unsaved-err');
+  function mark(e) {
+    var f = e.target.form;
+    if (f && e.target.matches('input, textarea, select')) dirty.add(f);
+  }
+  document.addEventListener('input', mark);
+  document.addEventListener('change', mark);
+  window.addEventListener('beforeunload', function (e) {
+    if (dirty.size && !submitting) { e.preventDefault(); e.returnValue = ''; }
+  });
+  function ask(proceed) { pending = proceed; errBox.hidden = true; modal.hidden = false; document.getElementById('u-save').focus(); }
+  function close() { modal.hidden = true; pending = null; }
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[href]');
+    if (!a || !dirty.size || a.target === '_blank' || a.getAttribute('href').charAt(0) === '#') return;
+    e.preventDefault();
+    ask(function () { location.href = a.href; });
+  });
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (submitting) return;
+    var others = Array.from(dirty).filter(function (x) { return x !== f; });
+    if (f.dataset.skipGuard || !others.length) { submitting = true; return; }
+    e.preventDefault();
+    ask(function () { submitting = true; f.submit(); });
+  }, true);
+  document.getElementById('u-stay').addEventListener('click', close);
+  document.getElementById('u-discard').addEventListener('click', function () {
+    dirty.clear(); var go = pending; close(); if (go) go();
+  });
+  document.getElementById('u-save').addEventListener('click', async function () {
+    var go = pending, forms = Array.from(dirty);
+    for (var i = 0; i < forms.length; i++) {
+      var f = forms[i];
+      if (!f.reportValidity()) { f.scrollIntoView(); errBox.textContent = 'יש שדה שלא מולא כראוי.'; errBox.hidden = false; return; }
+      var resp = await fetch(f.action, { method: 'POST', body: new URLSearchParams(new FormData(f)), credentials: 'same-origin' });
+      var url = new URL(resp.url);
+      if (!resp.ok || url.searchParams.get('err')) {
+        errBox.textContent = url.searchParams.get('flash') || 'השמירה נכשלה.'; errBox.hidden = false; return;
+      }
+      dirty.delete(f);
+    }
+    close(); if (go) go();
+  });
+})();
+</script>
 {% endblock %}

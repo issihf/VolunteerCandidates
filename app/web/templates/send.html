@@ -13,7 +13,7 @@
 {% if gender_missing %}<p class="hint">לא סומן מגדר, ולכן נבחר הנוסח הניטרלי. אפשר לסמן מגדר בדף המועמד/ת.</p>{% endif %}
 {% endif %}
 
-{% if problem %}<div class="flash error" role="alert">{{ problem }}{% if 'שם_פונה' in problem %} אפשר להגדיר את השם ב<a href="/settings">הגדרות</a>.{% endif %}</div>{% endif %}
+{% if problem %}<div class="flash error" role="alert">{{ problem }}{% if 'שם_מנהל_מפעמונים' in problem %} אפשר להגדיר את השם ב<a href="/settings">הגדרות</a>.{% endif %}</div>{% endif %}
 
 <section class="panel">
   {% if t.channel == 'email' %}<p><b>אל:</b> <span dir="ltr">{{ target }}</span></p><p><b>נושא:</b> {{ subject }}</p>{% else %}<p><b>אל:</b> <span dir="ltr">{{ target }}</span></p>{% endif %}
