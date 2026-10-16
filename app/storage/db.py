@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import create_engine, event, select
+from sqlalchemy import create_engine, event, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import DEFAULT_FOLLOW_UP_DAYS, db_path
@@ -37,8 +37,29 @@ def make_engine(path: Path | str | None = None):
     return engine
 
 
+def _add_missing_columns(engine) -> None:
+    """Additive migration: a database made by an older version gets the columns
+    added later. New tables are created by create_all; nothing is ever dropped."""
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in have:
+                    continue
+                ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col.type.compile(engine.dialect)}'
+                default = col.default.arg if col.default is not None and col.default.is_scalar else None
+                if default is not None:
+                    ddl += " DEFAULT " + (str(int(default)) if isinstance(default, bool) else
+                                          str(default) if isinstance(default, (int, float)) else "'" + str(default).replace("'", "''") + "'")
+                conn.execute(text(ddl))
+
+
 def init_db(engine) -> None:
     Base.metadata.create_all(engine)
+    _add_missing_columns(engine)
     with Session(engine) as session:
         ensure_defaults(session)
         session.commit()
@@ -59,3 +80,12 @@ def ensure_defaults(session: Session) -> None:
 
 def session_factory(engine) -> sessionmaker:
     return sessionmaker(engine, expire_on_commit=False)
+
+
+def get_default_follow_up_days(session: Session) -> int:
+    """The number of days given to a status added in the settings."""
+    setting = session.get(Setting, "follow_up_days")
+    try:
+        return max(1, int(setting.value)) if setting else DEFAULT_FOLLOW_UP_DAYS
+    except ValueError:
+        return DEFAULT_FOLLOW_UP_DAYS

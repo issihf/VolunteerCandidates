@@ -9,10 +9,14 @@
 <body>
 <header class="top">
   <a class="brand" href="/candidates">{{ app_title }}</a>
+  <nav class="mainnav" aria-label="ניווט ראשי">
+    <a href="/candidates">מועמדים</a>
+    <a href="/settings">הגדרות</a>
+  </nav>
   <span class="ver">גרסה {{ version }}</span>
 </header>
 <main>
-{% if flash is defined and flash %}<div class="flash" role="status">{{ flash }}</div>{% endif %}
+{% if flash is defined and flash %}<div class="flash{{ ' error' if err is defined and err else '' }}" role="{{ 'alert' if err is defined and err else 'status' }}">{{ flash }}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
 </body>

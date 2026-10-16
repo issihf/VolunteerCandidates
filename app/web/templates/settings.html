@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}הגדרות · {{ app_title }}{% endblock %}
+{% block content %}
+<h1>הגדרות</h1>
+
+<section class="panel">
+  <h2>סטטוסים</h2>
+  <p class="hint">הסטטוסים מופיעים בסדר שלהם בשינוי סטטוס. "ימי מעקב": אחרי כמה ימים משינוי הסטטוס יופיע תאריך מעקב אוטומטי (ריק = בלי מעקב). סטטוס "סיום" מוסתר מהרשימה כברירת מחדל. סטטוס שיש בו מועמדים אפשר להסתיר אבל לא למחוק.</p>
+  <table class="grid">
+    <thead><tr><th>סדר</th><th>שם</th><th>סוג</th><th>ימי מעקב</th><th>חובה תאריך</th><th>פעיל</th><th>מועמדים</th><th></th></tr></thead>
+    <tbody>
+    {% for st in statuses %}
+      <tr>
+        <td>
+          <form action="/settings/status/{{ st.id }}/move" method="post" class="inline">
+            <button class="mini secondary" name="direction" value="up" aria-label="הזזה למעלה" {{ 'disabled' if loop.first }}>▲</button>
+            <button class="mini secondary" name="direction" value="down" aria-label="הזזה למטה" {{ 'disabled' if loop.last }}>▼</button>
+          </form>
+        </td>
+        <td><input type="text" form="f{{ st.id }}" name="name" value="{{ st.name }}" aria-label="שם הסטטוס" required></td>
+        <td><select form="f{{ st.id }}" name="kind" aria-label="סוג">
+          <option value="active" {{ 'selected' if st.kind == 'active' }}>בתהליך</option>
+          <option value="final" {{ 'selected' if st.kind == 'final' }}>סיום</option></select></td>
+        <td class="num"><input type="number" form="f{{ st.id }}" name="follow_up_days" min="1" max="365" value="{{ st.follow_up_days if st.follow_up_days else '' }}" aria-label="ימי מעקב"></td>
+        <td><input type="checkbox" form="f{{ st.id }}" name="requires_date" value="1" {{ 'checked' if st.requires_date }} aria-label="חובה תאריך"></td>
+        <td><input type="checkbox" form="f{{ st.id }}" name="enabled" value="1" {{ 'checked' if st.enabled }} aria-label="פעיל"></td>
+        <td>{{ used.get(st.id, 0) }}</td>
+        <td><button type="submit" form="f{{ st.id }}" class="mini">שמירה</button></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% for st in statuses %}<form action="/settings/status/{{ st.id }}" method="post" id="f{{ st.id }}"></form>{% endfor %}
+</section>
+
+<section class="panel">
+  <h2>הוספת סטטוס</h2>
+  <form class="inline" action="/settings/add-status" method="post">
+    <div class="field"><label for="nn">שם</label><input id="nn" type="text" name="name" required></div>
+    <div class="field"><label for="nk">סוג</label><select id="nk" name="kind"><option value="active">בתהליך</option><option value="final">סיום</option></select></div>
+    <button type="submit">הוספה</button>
+  </form>
+  <form class="inline" action="/settings/default-days" method="post" style="margin-top:14px">
+    <div class="field"><label for="dd">ימי מעקב לסטטוס חדש "בתהליך" שמוסיפים כאן</label>
+      <input id="dd" type="number" name="days" min="1" max="365" value="{{ default_days }}"></div>
+    <button type="submit" class="secondary">עדכון</button>
+  </form>
+</section>
+{% endblock %}

@@ -33,3 +33,29 @@ table.grid { width:100%; border-collapse:collapse; background:var(--card); borde
 .badge { display:inline-block; background:var(--brand); color:var(--brand-ink); border-radius:999px; padding:2px 12px; font-size:.9rem; }
 .done { color:var(--ok); }
 @media (max-width:640px) { main { padding:14px 12px 32px; } .facts { grid-template-columns:1fr; } input[type=search] { min-width:0; flex:1; } }
+
+.mainnav { display:flex; gap:14px; margin-inline-start:12px; }
+.mainnav a { color:var(--ink); text-decoration:none; padding:2px 6px; border-bottom:2px solid transparent; }
+.mainnav a:hover { border-bottom-color:var(--brand); }
+.flash.error { background:#fdecea; color:#7a1c12; border-color:#f1b5ae; }
+@media (prefers-color-scheme: dark) { .flash.error { background:#3b1d1a; color:#ffd4cf; border-color:#7a3b34; } }
+.filters { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px; }
+select, input[type=text], input[type=date], input[type=number], textarea { font:inherit; padding:6px 9px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
+textarea { width:100%; min-height:64px; }
+.stack { display:flex; flex-direction:column; gap:10px; }
+.field { display:flex; flex-direction:column; gap:3px; }
+.field label, .lbl { font-size:.9rem; color:var(--muted); }
+.cols { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; margin-bottom:14px; }
+.cols .panel { margin-bottom:0; }
+h2 { font-size:1.1rem; margin:0 0 10px; }
+.journal { list-style:none; margin:0; padding:0; }
+.journal li { padding:10px 0; border-bottom:1px solid var(--line); display:grid; grid-template-columns:96px 1fr; gap:4px 14px; }
+.journal li:last-child { border-bottom:0; }
+.journal .when { color:var(--muted); font-size:.9rem; }
+.journal .what b { font-weight:600; }
+.journal .txt { white-space:pre-wrap; }
+.inline { display:flex; flex-wrap:wrap; gap:8px; align-items:end; }
+table.grid input[type=text], table.grid input[type=number] { width:100%; }
+table.grid td.num input { width:5.5em; }
+.mini { padding:4px 10px; font-size:.9rem; }
+.tag { font-size:.8rem; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 8px; }

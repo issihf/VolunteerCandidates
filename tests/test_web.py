@@ -133,3 +133,110 @@ def test_key_and_host_guard(engine):
         assert r.status_code == 303 and "vc_key" in r.headers["set-cookie"]
         assert c.get("/candidates").status_code == 200  # cookie kept by the client
         assert c.get("/candidates", headers={"host": "evil.example.com"}).status_code == 403
+
+
+# ---------------------------------------------------------------- stage 2
+
+def candidate_id(client, show_id=1004):
+    with client.app.state.sessions() as s:
+        return s.scalars(select(m.Candidate).where(m.Candidate.show_id == show_id)).one().id
+
+
+@pytest.fixture()
+def ready(client):
+    upload(client)
+    client.post("/fetch")
+    wait_job(client)
+    return client
+
+
+def shown(client, cid, flash_of=None):
+    resp = client.get(f"/candidates/{cid}")
+    return resp.text
+
+
+def test_status_change_from_the_page(ready):
+    cid = candidate_id(ready)
+    r = ready.post(f"/candidates/{cid}/status", data={"status_id": _status(ready, "invited"), "follow_up": "", "note": "ביום ג"})
+    assert r.status_code == 303 and "err=1" not in r.headers["location"]
+    page = shown(ready, cid)
+    assert "הוזמן לראיון" in page and "ביום ג" in page
+
+
+def _status(client, key):
+    with client.app.state.sessions() as s:
+        return s.scalars(select(m.Status).where(m.Status.key == key)).one().id
+
+
+def test_status_errors_are_shown_not_raised(ready):
+    cid = candidate_id(ready)
+    r = ready.post(f"/candidates/{cid}/status", data={"status_id": _status(ready, "not_now"), "follow_up": ""})
+    assert r.status_code == 303 and "err=1" in r.headers["location"]
+    assert "חובה לקבוע תאריך" in ready.get(r.headers["location"]).text
+    r = ready.post(f"/candidates/{cid}/status", data={"status_id": _status(ready, "invited"), "follow_up": "2001-01-01"})
+    assert "err=1" in r.headers["location"]
+    r = ready.post(f"/candidates/{cid}/status", data={"status_id": _status(ready, "invited"), "follow_up": "garbage"})
+    assert "err=1" in r.headers["location"]
+    r = ready.post(f"/candidates/{cid}/status", data={"status_id": 99999})
+    assert "err=1" in r.headers["location"]
+
+
+def test_contact_note_edit_follow_up(ready):
+    cid = candidate_id(ready)
+    ready.post(f"/candidates/{cid}/contact", data={"direction": "out", "channel": "whatsapp", "text": "שלחתי", "advance": "1"})
+    ready.post(f"/candidates/{cid}/note", data={"text": "ביקשה לחזור בערב"})
+    ready.post(f"/candidates/{cid}/edit", data={"first_name": "דנה", "last_name": "לוי", "gender": "female"})
+    page = shown(ready, cid)
+    assert "נשלחה פנייה בווטסאפ" in page and "ביקשה לחזור בערב" in page and "שלחתי" in page
+    assert 'value="female" selected' in page
+    ready.post(f"/candidates/{cid}/follow-up", data={"clear": "1"})
+    with ready.app.state.sessions() as s:
+        assert s.get(m.Candidate, cid).follow_up_date is None
+
+
+def test_candidate_list_filters(ready):
+    cid = candidate_id(ready)
+    ready.post(f"/candidates/{cid}/status", data={"status_id": _status(ready, "not_interested")})
+    assert "דנה לוי" not in ready.get("/candidates").text          # final: hidden by default
+    assert "דנה לוי" in ready.get("/candidates?s=final").text
+    assert "דנה לוי" in ready.get("/candidates?s=all").text
+    assert "יוסי כהן" in ready.get("/candidates").text
+    assert "דנה לוי" not in ready.get(f"/candidates?s={_status(ready, 'new')}").text
+
+
+def test_due_filter(ready):
+    cid = candidate_id(ready)
+    with ready.app.state.sessions() as s:
+        c = s.get(m.Candidate, cid)
+        from datetime import timedelta
+        from app.domain.dates import today_il
+        c.follow_up_date = today_il() - timedelta(days=1)
+        s.commit()
+    due = ready.get("/candidates?due=1").text
+    assert "דנה לוי" in due and "יוסי כהן" not in due
+
+
+def test_settings_page_and_changes(ready):
+    page = ready.get("/settings")
+    assert page.status_code == 200 and "לא עבר ראיון" in page.text
+    sid = _status(ready, "interested")
+    r = ready.post(f"/settings/status/{sid}", data={"name": "מעוניין מאוד", "kind": "active", "follow_up_days": "8", "enabled": "1"})
+    assert r.status_code == 303 and "err=1" not in r.headers["location"]
+    assert "מעוניין מאוד" in ready.get("/settings").text
+    bad = ready.post(f"/settings/status/{sid}", data={"name": "", "kind": "active", "follow_up_days": "8", "enabled": "1"})
+    assert "err=1" in bad.headers["location"]
+    assert ready.post("/settings/add-status", data={"name": "סטטוס חדש לגמרי", "kind": "active"}).status_code == 303
+    assert "סטטוס חדש לגמרי" in ready.get("/settings").text
+    assert ready.post(f"/settings/status/{sid}/move", data={"direction": "up"}).status_code == 303
+    assert ready.post("/settings/default-days", data={"days": "6"}).status_code == 303
+
+
+def test_hidden_status_not_offered_for_other_candidates(ready):
+    sid = _status(ready, "interested")
+    ready.post(f"/settings/status/{sid}", data={"name": "יצר קשר ומעוניין", "kind": "active", "follow_up_days": "5"})  # enabled unchecked
+    page = shown(ready, candidate_id(ready))
+    assert "יצר קשר ומעוניין" not in page.split('id="status_id"')[1].split("</select>")[0]
+
+
+def test_actions_on_missing_candidate(ready):
+    assert ready.post("/candidates/99999/note", data={"text": "x"}).status_code == 404

@@ -37,10 +37,20 @@
   {% endfor %}
 </nav>
 
-<form class="search" action="/candidates" method="get">
+<form class="filters" action="/candidates" method="get">
   <input type="hidden" name="tab" value="{{ tab }}">
   <input type="search" name="q" value="{{ q }}" placeholder="חיפוש לפי שם, טלפון, מייל או ישוב" aria-label="חיפוש">
-  <button type="submit" class="secondary">חיפוש</button>
+  {% if tab == 'candidate' %}
+  <label class="lbl" for="s">סטטוס</label>
+  <select id="s" name="s">
+    <option value="" {{ 'selected' if not s }}>בתהליך (בלי סיום)</option>
+    <option value="all" {{ 'selected' if s == 'all' }}>הכול</option>
+    <option value="final" {{ 'selected' if s == 'final' }}>סיום בלבד</option>
+    {% for st in statuses %}<option value="{{ st.id }}" {{ 'selected' if s == st.id|string }}>{{ st.name }}</option>{% endfor %}
+  </select>
+  <label><input type="checkbox" name="due" value="1" {{ 'checked' if due }}> מעקב להיום או באיחור ({{ due_count }})</label>
+  {% endif %}
+  <button type="submit" class="secondary">סינון</button>
 </form>
 
 {% if rows %}

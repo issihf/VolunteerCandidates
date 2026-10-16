@@ -67,6 +67,7 @@ class Candidate(Base):
     first_name: Mapped[str] = mapped_column(String(100), default="")
     last_name: Mapped[str] = mapped_column(String(100), default="")
     gender: Mapped[str | None] = mapped_column(String(10), nullable=True)  # male | female | None
+    names_edited: Mapped[bool] = mapped_column(Boolean, default=False)  # a person fixed first/last name: never re-split
 
     # what the list showed (kept until the page is read)
     list_unit: Mapped[str] = mapped_column(String(200), default="")
@@ -100,6 +101,9 @@ class Candidate(Base):
     follow_up_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     status: Mapped[Status | None] = relationship()
+    journal: Mapped[list["JournalEntry"]] = relationship(
+        back_populates="candidate", order_by="JournalEntry.occurred_on.desc(), JournalEntry.id.desc()",
+        cascade="all, delete-orphan")
 
     @property
     def display_mobile(self) -> str:
@@ -112,3 +116,28 @@ class Candidate(Base):
     @property
     def display_city(self) -> str:
         return self.city or self.list_city
+
+
+# JournalEntry.kind values
+J_STATUS = "status"   # the status changed
+J_NOTE = "note"       # a free note
+J_OUT = "out"         # we contacted the person
+J_IN = "in"           # the person answered
+J_KINDS = (J_STATUS, J_NOTE, J_OUT, J_IN)
+CHANNELS = {"whatsapp": "ווטסאפ", "email": "מייל", "phone": "טלפון", "other": "אחר"}
+
+
+class JournalEntry(Base):
+    """One line in a candidate's contact history. Feeds the summary for Paamonim."""
+    __tablename__ = "journal_entry"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("candidate.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    occurred_on: Mapped[date] = mapped_column(Date)
+    kind: Mapped[str] = mapped_column(String(10))
+    channel: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    status_id: Mapped[int | None] = mapped_column(ForeignKey("status.id"), nullable=True)  # status after a change
+
+    candidate: Mapped[Candidate] = relationship(back_populates="journal")
+    status: Mapped[Status | None] = relationship()

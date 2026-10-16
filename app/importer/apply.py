@@ -41,8 +41,9 @@ def apply_profile(session: Session, cand: m.Candidate, profile: Profile) -> str:
     if profile.user_id:
         cand.user_id = profile.user_id
     if profile.full_name and profile.full_name != cand.full_name:
-        cand.full_name = profile.full_name  # the page is the source of truth for the name
-        cand.first_name, cand.last_name = split_name(cand.full_name)
+        cand.full_name = profile.full_name  # the page is the source of truth for the full name
+        if not cand.names_edited:
+            cand.first_name, cand.last_name = split_name(cand.full_name)
     elif not (cand.first_name or cand.last_name):
         cand.first_name, cand.last_name = split_name(cand.full_name)
     cand.unit = f("unit")
