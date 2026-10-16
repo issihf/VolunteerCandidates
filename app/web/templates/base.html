@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+{% if bare is defined and bare %}
+<header class="top"><span class="brand">{{ app_title }}</span></header>
+{% else %}
 <header class="top">
   <a class="brand" href="/candidates">{{ app_title }}</a>
   <nav class="mainnav" aria-label="ניווט ראשי">
@@ -14,7 +17,11 @@
     <a href="/settings">הגדרות</a>
   </nav>
   <span class="ver">גרסה {{ version }}</span>
+  {% if require_password %}<form action="/lock" method="post" class="inline"><button class="mini secondary" type="submit">נעילה</button></form>{% endif %}
 </header>
+{% set reminder = backup_reminder() %}
+{% if reminder %}<div class="flash" role="status">{{ reminder }} <a href="/settings">להגדרות</a></div>{% endif %}
+{% endif %}
 <main>
 {% if flash is defined and flash %}<div class="flash{{ ' error' if err is defined and err else '' }}" role="{{ 'alert' if err is defined and err else 'status' }}">{{ flash }}</div>{% endif %}
 {% block content %}{% endblock %}

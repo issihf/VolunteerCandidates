@@ -86,7 +86,7 @@ def main() -> int:
     setup_logging()
     token = secrets.token_urlsafe(24)
     port = _free_port()
-    app = create_app(token=token)
+    app = create_app(token=token, require_password=True)
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_config=None, access_log=False)
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)

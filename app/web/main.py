@@ -1,6 +1,7 @@
 """The local web app: candidates list, import, fetching, one candidate's page."""
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import date
 from pathlib import Path
@@ -18,9 +19,13 @@ from app import __version__
 from app.config import APP_TITLE, PAAMONIM_BASE_URL
 from app.actions import candidates as act
 from app.actions import settings as cfg
+from app.actions.summary import build_summary
 from app.domain.dates import format_date, today_il
 from app.domain.phones import best_whatsapp_number
+from app import backup as bk
+from app.config import data_dir
 from app.importer import apply
+from app.security import auth
 from app.messaging import fill as mfill
 from app.messaging.outlook import Drafter, MailError, default_drafter
 from app.importer.list_import import import_list
@@ -41,7 +46,7 @@ COOKIE = "vc_key"
 
 
 def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: str | None = None,
-               drafter: Drafter | None = None) -> FastAPI:
+               drafter: Drafter | None = None, require_password: bool = False) -> FastAPI:
     engine = engine or make_engine()
     init_db(engine)
     sessions = session_factory(engine)
@@ -55,10 +60,33 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
     app.state.job = FetchJob(sessions, fetcher_factory)
     app.state.token = token
     app.state.drafter = drafter or default_drafter()
+    app.state.lock = auth.Lock()
+    app.state.require_password = require_password
+    log = logging.getLogger(__name__)
     templates = Jinja2Templates(directory=str(HERE / "templates"))
     templates.env.globals.update(app_title=APP_TITLE, version=__version__, base_url=PAAMONIM_BASE_URL,
-                                 fmt_date=format_date, today=today_il)
+                                 fmt_date=format_date, today=today_il, require_password=require_password)
+    templates.env.globals["backup_reminder"] = lambda: reminder_text()
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+
+    OPEN_PATHS = ("/login", "/setup", "/static")
+
+    @app.middleware("http")
+    async def password_gate(request: Request, call_next):  # noqa: ANN202
+        """With a password: nothing but the login pages works until it is entered, and the
+        program locks itself after 15 idle minutes."""
+        if not request.app.state.require_password or request.url.path.startswith(OPEN_PATHS):
+            return await call_next(request)
+        lock = request.app.state.lock
+        if not lock.is_unlocked:
+            if request.url.path == "/fetch/status":
+                return JSONResponse({"error": "locked"}, status_code=403)
+            with sessions() as session:
+                target = "/login" if auth.has_password(session) else "/setup"
+            return RedirectResponse(target, status_code=303)
+        if request.url.path != "/fetch/status":
+            lock.touch()
+        return await call_next(request)
 
     @app.middleware("http")
     async def guard(request: Request, call_next):  # noqa: ANN202
@@ -133,6 +161,7 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
         data = await file.read(MAX_UPLOAD + 1)
         if not data or len(data) > MAX_UPLOAD:
             return RedirectResponse("/candidates?flash=" + quote("הקובץ ריק או גדול מדי"), status_code=303)
+        auto_backup("import")
         with db() as session:
             result = import_list(session, data)
             session.commit()
@@ -285,7 +314,10 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
                    "sender_name": cfg.get_setting(session, "sender_name"),
                    "link_style": cfg.get_setting(session, "whatsapp_link_style", "api"),
                    "link_styles": mfill.LINK_STYLES, "template_channels": m.TEMPLATE_CHANNELS,
-                   "variables": mfill.VARIABLE_HELP}
+                   "variables": mfill.VARIABLE_HELP,
+                   "backups": bk.list_backups() if app.state.require_password else [],
+                   "backup_dir": str(bk.backups_dir()), "backup_kinds": bk.KINDS,
+                   "last_copy": cfg.get_setting(session, "last_external_copy")}
         return templates.TemplateResponse(request, "settings.html", ctx)
 
     @app.post("/settings/status/{sid}")
@@ -408,5 +440,179 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
                 session.rollback()
                 return RedirectResponse(f"/candidates/{cid}/send/{tid}?err=1&flash=" + quote(str(exc)), status_code=303)
         return RedirectResponse(f"/candidates/{cid}?flash=" + quote(message), status_code=303)
+
+    # ------------------------------------------------------------- summary and delete
+    @app.get("/candidates/{cid}/summary", response_class=HTMLResponse)
+    def summary(request: Request, cid: int):  # noqa: ANN202
+        with db() as session:
+            cand = session.get(m.Candidate, cid)
+            if cand is None:
+                raise HTTPException(404)
+            _ = cand.status
+            ctx = {"c": cand, "summary": build_summary(cand)}
+        return templates.TemplateResponse(request, "summary.html", ctx)
+
+    @app.post("/candidates/{cid}/delete")
+    def post_delete(cid: int):  # noqa: ANN202
+        with db() as session:
+            cand = session.get(m.Candidate, cid)
+            if cand is None:
+                raise HTTPException(404)
+            auto_backup("delete")
+            act.delete_candidate(session, cand)
+            session.commit()
+        return RedirectResponse("/candidates?flash=" + quote("המועמד/ת נמחק/ה"), status_code=303)
+
+    @app.post("/settings/delete-all")
+    def post_delete_all(confirm: str = Form("")):  # noqa: ANN202
+        def run(session):  # noqa: ANN001, ANN202
+            if confirm.strip() == "מחיקה":
+                auto_backup("delete", required=True)
+            n = act.delete_everything(session, confirm)
+            return f"נמחקו {n} מועמדים וכל הנתונים שלהם"
+        return settings_do(run)
+
+    # ------------------------------------------------------- password, lock, backups
+    def secret() -> str | None:
+        return app.state.lock.secret
+
+    def auto_backup(kind: str, *, required: bool = False) -> None:
+        """Encrypted backup before a risky step. Without a password in memory there is nothing to
+        encrypt with: skipped. A failure stops steps that destroy data (required=True)."""
+        pw = secret()
+        if pw is None:
+            return
+        try:
+            bk.create_backup(engine, pw, kind)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("backup failed: %s", type(exc).__name__)
+            if required:
+                raise act.UserError("לא הצלחנו ליצור גיבוי לפני הפעולה, ולכן היא לא בוצעה") from None
+
+    def daily_backup() -> None:
+        try:
+            if secret() and not bk.has_backup_today():
+                bk.create_backup(engine, secret(), "daily")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("daily backup failed: %s", type(exc).__name__)
+
+    def reminder_text() -> str:
+        """A gentle weekly nudge to copy the encrypted backups out of this computer."""
+        if not app.state.require_password:
+            return ""
+        with sessions() as session:
+            row = session.get(m.Setting, "last_external_copy")
+            if session.scalar(select(func.count()).select_from(m.Candidate)) == 0:
+                return ""
+            try:
+                last = date.fromisoformat(row.value) if row and row.value else None
+            except ValueError:
+                last = None
+        if last is None or (today_il() - last).days >= 7:
+            return "כדאי להעתיק את קבצי הגיבוי לכונן חיצוני (הגדרות > גיבוי)."
+        return ""
+
+    @app.get("/setup", response_class=HTMLResponse)
+    def setup_page(request: Request, flash: str = ""):  # noqa: ANN202
+        with db() as session:
+            if auth.has_password(session):
+                return RedirectResponse("/login", status_code=303)
+        return templates.TemplateResponse(request, "password.html", {"mode": "setup", "flash": flash, "err": bool(flash), "bare": True})
+
+    @app.post("/setup")
+    def setup_post(password: str = Form(""), again: str = Form("")):  # noqa: ANN202
+        with db() as session:
+            if auth.has_password(session):
+                return RedirectResponse("/login", status_code=303)
+            try:
+                auth.check_new_password(password, again)
+            except auth.AuthError as exc:
+                return RedirectResponse("/setup?flash=" + quote(str(exc)), status_code=303)
+            auth.set_password(session, password)
+            session.commit()
+        app.state.lock.unlock(password)
+        daily_backup()
+        return RedirectResponse("/candidates", status_code=303)
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login_page(request: Request, flash: str = ""):  # noqa: ANN202
+        with db() as session:
+            if not auth.has_password(session):
+                return RedirectResponse("/setup", status_code=303)
+        return templates.TemplateResponse(request, "password.html", {"mode": "login", "flash": flash, "err": bool(flash), "bare": True})
+
+    @app.post("/login")
+    def login_post(password: str = Form("")):  # noqa: ANN202
+        lock = app.state.lock
+        wait = lock.wait_seconds()
+        if wait:
+            return RedirectResponse("/login?flash=" + quote(f"יותר מדי ניסיונות. אפשר לנסות שוב בעוד {wait} שניות"), status_code=303)
+        with db() as session:
+            ok = auth.verify(session, password)
+        if not ok:
+            lock.failed()
+            return RedirectResponse("/login?flash=" + quote("הסיסמה שגויה"), status_code=303)
+        lock.unlock(password)
+        daily_backup()
+        return RedirectResponse("/candidates", status_code=303)
+
+    @app.post("/lock")
+    def lock_now():  # noqa: ANN202
+        app.state.lock.lock()
+        return RedirectResponse("/login", status_code=303)
+
+    @app.post("/settings/password")
+    def post_password(old: str = Form(""), password: str = Form(""), again: str = Form("")):  # noqa: ANN202
+        def run(session):  # noqa: ANN001, ANN202
+            if not auth.verify(session, old):
+                raise act.UserError("הסיסמה הנוכחית שגויה")
+            try:
+                auth.check_new_password(password, again)
+            except auth.AuthError as exc:
+                raise act.UserError(str(exc)) from None
+            auth.set_password(session, password)
+            app.state.lock.secret = password
+            return "הסיסמה הוחלפה. גיבויים קודמים נשארים מוצפנים בסיסמה הישנה."
+        return settings_do(run)
+
+    @app.post("/settings/backup/now")
+    def post_backup_now():  # noqa: ANN202
+        def run(session):  # noqa: ANN001, ANN202
+            if secret() is None:
+                raise act.UserError("גיבוי מוצפן זמין רק כשהתוכנה מוגנת בסיסמה")
+            auto_backup("manual", required=True)
+            return "הגיבוי נוצר"
+        return settings_do(run)
+
+    @app.post("/settings/backup/restore")
+    def post_restore(name: str = Form(""), password: str = Form("")):  # noqa: ANN202
+        def run(session):  # noqa: ANN001, ANN202
+            session.rollback()
+            path = bk.backups_dir() / name
+            if not (bk.parse_name(name) and path.is_file()):
+                raise act.UserError("הגיבוי לא נמצא")
+            try:
+                bk.decrypt(path.read_bytes(), password)
+            except bk.BackupError as exc:
+                raise act.UserError(str(exc)) from None
+            auto_backup("restore", required=True)
+            try:
+                bk.restore_backup(engine, name, password)
+                init_db(engine)
+            except bk.BackupError as exc:
+                raise act.UserError(str(exc)) from None
+            return "הגיבוי שוחזר. אם הסיסמה בגיבוי שונה, בכניסה הבאה תהיה הסיסמה של אותו זמן."
+        return settings_do(run)
+
+    @app.post("/settings/external-copy")
+    def post_external_copy():  # noqa: ANN202
+        def run(session):  # noqa: ANN001, ANN202
+            row = session.get(m.Setting, "last_external_copy")
+            if row is None:
+                session.add(m.Setting(key="last_external_copy", value=today_il().isoformat()))
+            else:
+                row.value = today_il().isoformat()
+            return "נרשם שהעתקת לכונן חיצוני"
+        return settings_do(run)
 
     return app

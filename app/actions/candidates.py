@@ -99,3 +99,21 @@ def edit_person(cand: m.Candidate, first_name: str, last_name: str, gender: str)
         cand.first_name, cand.last_name, cand.names_edited = first, last, True
     cand.gender = gender or None
 
+
+
+def delete_candidate(session: Session, cand: m.Candidate) -> None:
+    """Removes the person and the whole journal. A later import will add them again as new."""
+    session.delete(cand)
+
+
+def delete_everything(session: Session, confirm: str) -> int:
+    """All candidates, journals and import records. Statuses, templates and settings stay."""
+    if confirm.strip() != "מחיקה":
+        raise UserError("כדי למחוק הכול יש להקליד את המילה: מחיקה")
+    count = 0
+    for cand in list(session.scalars(select(m.Candidate))):
+        session.delete(cand)
+        count += 1
+    for run in list(session.scalars(select(m.ImportRun))):
+        session.delete(run)
+    return count

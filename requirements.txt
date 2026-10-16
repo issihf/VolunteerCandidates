@@ -9,3 +9,5 @@ tzdata>=2025.2
 playwright>=1.56   # the dedicated browser (uses the installed Edge/Chrome, nothing to download)
 pywebview>=6.2
 pywin32>=311; sys_platform == "win32"   # Outlook drafts (COM)
+argon2-cffi>=25.1
+cryptography>=46

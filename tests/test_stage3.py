@@ -193,4 +193,30 @@ def test_old_variable_is_migrated(engine):
 def test_settings_page_has_unsaved_guard(env):
     page = env.get("/settings").text
     assert 'id="unsaved"' in page and "שם_מנהל_מפעמונים" in page
-    assert page.count("<section") == 4 and "<section" not in page.split("</title>")[0]
+    assert page.count("<section") == 5 and "<section" not in page.split("</title>")[0]
+
+
+# ------------------------------------------------------------------ stage 4a
+def test_summary_text_and_page(env):
+    add_tpl(env)
+    t = tid(env)
+    env.post(f"/candidates/{env.cand}/send/{t}/sent", data={"advance": "1"})
+    env.post(f"/candidates/{env.cand}/note", data={"text": "ביקשה לחזור ביום ג"})
+    page = env.get(f"/candidates/{env.cand}/summary").text
+    assert "סיכום קשר" in page and "נשלחה פנייה בווטסאפ" in page and "ביקשה לחזור ביום ג" in page
+    assert "תבנית: פנייה" in page and "/contacts/show/1004" in page
+
+
+def test_delete_candidate_and_all(env):
+    r = env.post(f"/candidates/{env.cand}/delete")
+    assert r.status_code == 303
+    with env.app.state.sessions() as s:
+        assert s.get(m.Candidate, env.cand) is None
+        assert s.scalars(select(m.JournalEntry)).first() is None
+    bad = env.post("/settings/delete-all", data={"confirm": "x"})
+    assert "err=1" in bad.headers["location"]
+    with env.app.state.sessions() as s:
+        assert s.scalars(select(m.Candidate)).first() is not None
+    env.post("/settings/delete-all", data={"confirm": "מחיקה"})
+    with env.app.state.sessions() as s:
+        assert s.scalars(select(m.Candidate)).first() is None and s.scalars(select(m.Status)).first() is not None

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}סיכום · {{ c.full_name }}{% endblock %}
+{% block content %}
+<p><a href="/candidates/{{ c.id }}">→ חזרה ל{{ c.full_name }}</a></p>
+<h1>סיכום לפעמונים · {{ c.full_name }}</h1>
+<section class="panel">
+  <textarea id="sum" rows="16" readonly>{{ summary }}</textarea>
+  <div class="actions">
+    <button type="button" id="copy-open">העתקה ופתיחה בפעמונים</button>
+    <button type="button" id="copy" class="secondary">העתקה בלבד</button>
+    <span id="done" class="hint" role="status"></span>
+  </div>
+  <p class="hint">בפעמונים: "הוספת הערה", הדבקה, ובחירה אם "לעיני כותב ההערה בלבד".</p>
+</section>
+<script>
+(function () {
+  var box = document.getElementById('sum'), done = document.getElementById('done');
+  function copy() {
+    return navigator.clipboard.writeText(box.value).then(function () { done.textContent = 'הועתק'; return true; },
+      function () { box.select(); document.execCommand('copy'); done.textContent = 'הועתק'; return true; });
+  }
+  document.getElementById('copy').onclick = copy;
+  document.getElementById('copy-open').onclick = function () {
+    copy().then(function () { window.open('{{ base_url }}/contacts/show/{{ c.show_id }}', '_blank', 'noopener'); });
+  };
+})();
+</script>
+{% endblock %}

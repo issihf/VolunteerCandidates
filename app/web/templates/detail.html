@@ -106,6 +106,16 @@
   {% else %}<p class="hint">עוד אין תבניות. אפשר להגדיר אותן ב<a href="/settings">הגדרות</a>.</p>{% endif %}
 </section>
 
+<section class="panel">
+  <h2>סיכום לפעמונים</h2>
+  <p class="hint">טקסט מהיומן להדבקה כהערה בדף האדם בפעמונים. המערכת לא כותבת לשם בעצמה.</p>
+  <a class="button" href="/candidates/{{ c.id }}/summary">הכנת סיכום</a>
+  <form action="/candidates/{{ c.id }}/delete" method="post" class="inline" style="margin-top:12px"
+        onsubmit="return confirm('למחוק את המועמד/ת ואת כל היומן? אי אפשר לשחזר. ייבוא חוזר של הרשימה יוסיף אותו/ה שוב כחדש/ה.')">
+    <button type="submit" class="mini secondary">מחיקת המועמד/ת</button>
+  </form>
+</section>
+
 <dl class="facts">
   <dt>טלפון נייד</dt><dd dir="ltr">{{ c.display_mobile }}{% if whatsapp %} <a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">ווטסאפ</a>{% endif %}</dd>
   <dt>טלפון עבודה</dt><dd dir="ltr">{{ c.phone_work }}</dd>
