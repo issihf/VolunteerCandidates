@@ -220,3 +220,18 @@ def test_delete_candidate_and_all(env):
     env.post("/settings/delete-all", data={"confirm": "מחיקה"})
     with env.app.state.sessions() as s:
         assert s.scalars(select(m.Candidate)).first() is None and s.scalars(select(m.Status)).first() is not None
+
+
+def test_template_test_draft(env):
+    env.post("/settings/messaging", data=dict(sender_name="איסי", link_style="api"))
+    add_tpl(env, name="מייל", channel="email", subject="שלום {{שם}}", body_neutral="גוף {{שם_מנהל_מפעמונים}}", body_male="")
+    t = tid(env)
+    r = env.post(f"/settings/templates/{t}/test", data={"variant": "neutral", "to": "me@example.org"})
+    assert "err=1" not in r.headers["location"]
+    d = env.drafter.drafts[-1]
+    assert d["to"] == ["me@example.org"] and d["subject"] == "שלום דנה" and "איסי" in d["html"]
+    assert "err=1" in env.post(f"/settings/templates/{t}/test", data={"variant": "male"}).headers["location"]
+    assert "err=1" in env.post(f"/settings/templates/{t}/test", data={"variant": "neutral", "to": "bad address"}).headers["location"]
+    add_tpl(env, name="וו")
+    assert "err=1" in env.post(f"/settings/templates/{tid(env)}/test", data={"variant": "neutral"}).headers["location"]
+    assert "פתיחת טיוטת בדיקה" in env.get("/settings").text
