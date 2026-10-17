@@ -76,6 +76,15 @@
       <label><input type="checkbox" name="enabled" value="1" {{ 'checked' if t.enabled }}> פעילה</label>
       <div><button type="submit">שמירה</button></div>
     </form>
+    {% if t.channel == 'email' %}
+    <form class="inline" action="/settings/templates/{{ t.id }}/test" method="post" data-noguard="1" style="margin-top:10px">
+      <div class="field"><label>בדיקה ב-Outlook, נוסח</label>
+        <select name="variant"><option value="neutral">ניטרלי</option><option value="male">לשון זכר</option><option value="female">לשון נקבה</option></select></div>
+      <div class="field"><label>אל (לא חובה, למשל המייל שלך)</label><input type="text" name="to" dir="ltr" placeholder="name@example.org"></div>
+      <button type="submit" class="secondary">פתיחת טיוטת בדיקה</button>
+      <span class="hint">נשמרת התבנית כפי שנשמרה. הטיוטה עם השם "דנה כהן", לא נשלחת ולא נרשמת.</span>
+    </form>
+    {% endif %}
     <form action="/settings/templates/{{ t.id }}/delete" method="post" onsubmit="return confirm('למחוק את התבנית?')"><button class="mini secondary" type="submit">מחיקה</button></form>
   </details>
   {% else %}<p class="hint">עוד אין תבניות.</p>{% endfor %}

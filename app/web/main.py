@@ -615,4 +615,29 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
             return "נרשם שהעתקת לכונן חיצוני"
         return settings_do(run)
 
+    @app.post("/settings/templates/{tid}/test")
+    def post_template_test(tid: int, variant: str = Form("neutral"), to: str = Form("")):  # noqa: ANN202
+        """Open a sample draft of an email template in Outlook, without any candidate: made-up
+        name and family name, the real manager name from the settings."""
+        def run(session):  # noqa: ANN001, ANN202
+            tpl = session.get(m.MessageTemplate, tid)
+            if tpl is None:
+                raise act.UserError("התבנית לא נמצאה")
+            if tpl.channel != "email":
+                raise act.UserError("בדיקה ב-Outlook זמינה לתבניות מייל בלבד")
+            body = tpl.body_for(variant)
+            if not body.strip():
+                raise act.UserError("הנוסח שנבחר ריק בתבנית הזו")
+            sender = cfg.get_setting(session, "sender_name") or "(שם המנהל/ת)"
+            values = mfill.candidate_values("דנה", "כהן", sender)
+            address = to.strip()
+            if address and ("@" not in address or " " in address):
+                raise act.UserError("כתובת המייל אינה תקינה")
+            try:
+                app.state.drafter.open_text_draft(tpl.subject, body, [address] if address else [], values)
+            except MailError as exc:
+                raise act.UserError(exc.message) from None
+            return "טיוטת בדיקה נפתחה ב-Outlook (השם בטיוטה: דנה כהן). היא לא נשלחת ולא נרשמת ביומן."
+        return settings_do(run)
+
     return app
