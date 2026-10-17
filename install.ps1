@@ -1,4 +1,4 @@
-# Install (or update) the program for the current Windows user. No administrator rights.
+﻿# Install (or update) the program for the current Windows user. No administrator rights.
 #   .\install.ps1                      from .\dist\VolunteerCandidates (after .\build.ps1)
 #   .\install.ps1 -From <folder>       from an unzipped release
 # Program: %LOCALAPPDATA%\Programs\VolunteerCandidates   Data: %LOCALAPPDATA%\VolunteerCandidates (never touched)

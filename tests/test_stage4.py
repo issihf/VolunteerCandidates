@@ -168,3 +168,12 @@ def test_reminder_banner(pw_client):
     assert "כונן חיצוני" in pw_client.get("/candidates").text
     pw_client.post("/settings/external-copy")
     assert "כונן חיצוני" not in pw_client.get("/candidates").text.split("<main>")[0]
+
+
+def test_powershell_scripts_survive_windows_powershell():
+    """Windows PowerShell 5.1 reads a script without a BOM as ANSI: Hebrew text then breaks the parser."""
+    from pathlib import Path
+    for script in Path(__file__).parent.parent.glob("*.ps1"):
+        raw = script.read_bytes()
+        if any(b > 127 for b in raw):
+            assert raw.startswith(b"\xef\xbb\xbf"), f"{script.name} has Hebrew but no UTF-8 BOM"
