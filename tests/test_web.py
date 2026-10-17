@@ -235,7 +235,8 @@ def test_hidden_status_not_offered_for_other_candidates(ready):
     sid = _status(ready, "interested")
     ready.post(f"/settings/status/{sid}", data={"name": "יצר קשר ומעוניין", "kind": "active", "follow_up_days": "5"})  # enabled unchecked
     page = shown(ready, candidate_id(ready))
-    assert "יצר קשר ומעוניין" not in page.split('id="status_id"')[1].split("</select>")[0]
+    option = [l for l in page.split('id="d-status"')[1].split("</select>")[0].split("</option>") if "יצר קשר ומעוניין" in l][0]
+    assert "hidden disabled" in option  # not offered (the dialog un-hides it only for someone who already has it)
 
 
 def test_actions_on_missing_candidate(ready):

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_actions.html" as A %}
 {% block content %}
 <section class="panel">
   <form class="row" action="/import" method="post" enctype="multipart/form-data">
@@ -54,19 +55,21 @@
 </form>
 
 {% if rows %}
+<div class="table-wrap">
 <table class="grid">
-  <thead><tr><th>שם</th><th>טלפון נייד</th><th>ישוב</th><th>דוא"ל</th>
-    {% if tab == 'candidate' %}<th>סטטוס</th><th>מעקב</th>{% else %}<th>הערה</th>{% endif %}</tr></thead>
+  <thead><tr><th>שם</th><th>טלפון נייד</th><th class="hide-s">ישוב</th><th class="hide-s">דוא"ל</th>
+    {% if tab == 'candidate' %}<th>סטטוס</th><th>מעקב</th><th class="acts-col">פעולות</th>{% else %}<th>הערה</th>{% endif %}</tr></thead>
   <tbody>
   {% for c in rows %}
     <tr>
       <td><a href="/candidates/{{ c.id }}">{{ c.full_name or ('#' ~ c.show_id) }}</a></td>
       <td dir="ltr">{{ c.display_mobile }}</td>
-      <td>{{ c.display_city }}</td>
-      <td dir="ltr">{{ c.display_email }}</td>
+      <td class="hide-s">{{ c.display_city }}</td>
+      <td dir="ltr" class="hide-s">{{ c.display_email }}</td>
       {% if tab == 'candidate' %}
         <td>{{ c.status.name if c.status else '' }}</td>
         <td class="{{ 'late' if c.follow_up_date and c.follow_up_date <= today() else '' }}">{{ fmt_date(c.follow_up_date) }}</td>
+        <td class="acts-col">{{ A.buttons(c) }}</td>
       {% else %}
         <td>{{ c.state_reason }}</td>
       {% endif %}
@@ -74,9 +77,11 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <p class="empty">אין רשומות כאן.</p>
 {% endif %}
+{% if tab == 'candidate' and rows %}{% include "_dialogs.html" %}{% endif %}
 
 <script>
 (function () {

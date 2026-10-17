@@ -235,3 +235,43 @@ def test_template_test_draft(env):
     add_tpl(env, name="וו")
     assert "err=1" in env.post(f"/settings/templates/{tid(env)}/test", data={"variant": "neutral"}).headers["location"]
     assert "פתיחת טיוטת בדיקה" in env.get("/settings").text
+
+
+# ------------------------------------------------------------------ actions in the list and on the page
+def test_list_has_action_buttons_and_dialogs(env):
+    page = env.get("/candidates").text
+    for act_name in ("status", "contact", "send", "summary"):
+        assert f'data-act="{act_name}"' in page
+    assert 'id="dlg-status"' in page and 'id="dlg-summary"' in page and "/static/actions.js" in page
+    assert env.get("/static/actions.js").status_code == 200
+
+
+def test_detail_rail_and_dialogs(env):
+    page = env.get(f"/candidates/{env.cand}").text
+    assert 'class="rail"' in page and 'data-act="send"' in page and 'id="dlg-contact"' in page
+
+
+def test_status_and_contact_return_to_the_list(env):
+    with env.app.state.sessions() as s:
+        status_id = s.scalars(select(m.Status).where(m.Status.key == "replied")).one().id
+    r = env.post(f"/candidates/{env.cand}/status", data={"status_id": status_id, "next": "/candidates?tab=candidate&s=all&flash=old"})
+    loc = unquote(r.headers["location"])
+    assert loc.startswith("/candidates?tab=candidate&s=all&flash=") and "old" not in loc
+    r = env.post(f"/candidates/{env.cand}/contact", data={"direction": "note", "text": "הערה מהרשימה", "next": "/candidates?tab=candidate"})
+    assert r.headers["location"].startswith("/candidates?tab=candidate&flash=")
+    bad = env.post(f"/candidates/{env.cand}/contact", data={"direction": "note", "text": "  ", "next": "/candidates"})
+    assert "err=1" in bad.headers["location"] and bad.headers["location"].startswith("/candidates?flash=")
+    with env.app.state.sessions() as s:
+        assert any(e.kind == m.J_NOTE and e.text == "הערה מהרשימה" for e in s.get(m.Candidate, env.cand).journal)
+
+
+def test_next_cannot_point_elsewhere(env):
+    for evil in ("https://evil.example/x", "//evil.example", "/settings", "/candidates//evil", "/candidates\\evil"):
+        r = env.post(f"/candidates/{env.cand}/contact", data={"direction": "note", "text": "x", "next": evil})
+        assert r.headers["location"].startswith(f"/candidates/{env.cand}?flash=")
+
+
+def test_summary_txt(env):
+    r = env.get(f"/candidates/{env.cand}/summary.txt")
+    assert r.status_code == 200 and "סיכום קשר" in r.text and r.headers["cache-control"] == "no-store"
+    assert env.get("/candidates/99999/summary.txt").status_code == 404

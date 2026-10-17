@@ -119,7 +119,7 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
 
     @app.get("/candidates", response_class=HTMLResponse)
     def candidates(request: Request, tab: str = m.CANDIDATE, q: str = "", flash: str = "", s: str = "",
-                   due: str = ""):  # noqa: ANN202
+                   due: str = "", err: str = ""):  # noqa: ANN202
         if tab not in m.STATES:
             tab = m.CANDIDATE
         with db() as session:
@@ -153,7 +153,8 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
                     select(m.Status.id).where(m.Status.kind != "final")))))
             ctx = {"tab": tab, "tabs": TABS, "counts": all_counts, "rows": rows, "q": q, "flash": flash,
                    "job": app.state.job.status(), "pending": all_counts[m.PENDING], "s": s, "due": due,
-                   "due_count": due_count, "statuses": cfg.ordered_statuses(session)}
+                   "due_count": due_count, "statuses": cfg.ordered_statuses(session), "err": bool(err),
+                   "msg_templates": [t for t in cfg.ordered_templates(session) if t.enabled], "channels": m.CHANNELS}
         return templates.TemplateResponse(request, "candidates.html", ctx)
 
     @app.post("/import")
@@ -200,8 +201,8 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
             for e in journal:
                 _ = e.status
             ctx = {"c": cand, "whatsapp": wa, "state_names": dict(TABS), "flash": flash, "err": bool(err),
-                   "templates": [t for t in cfg.ordered_templates(session) if t.enabled],
-                   "status_options": options, "journal": journal, "channels": m.CHANNELS,
+                   "msg_templates": [t for t in cfg.ordered_templates(session) if t.enabled],
+                   "statuses": cfg.ordered_statuses(session), "status_options": options, "journal": journal, "channels": m.CHANNELS,
                    "kind_names": {m.J_STATUS: "סטטוס", m.J_NOTE: "הערה", m.J_OUT: "פנינו", m.J_IN: "התקבלה תשובה"}}
         return templates.TemplateResponse(request, "detail.html", ctx)
 
@@ -237,8 +238,19 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
         except ValueError:
             raise act.UserError("התאריך אינו תקין") from None
 
-    def do(cid: int, fn: Callable) -> RedirectResponse:
-        """Run an action on a candidate; show its message or the problem on the candidate's page."""
+    def back_to(cid: int, next_url: str, message: str, err: bool) -> RedirectResponse:
+        """Back to the page the action was started from (the list or the candidate), with the message."""
+        target = f"/candidates/{cid}"
+        nxt = (next_url or "").strip()
+        if nxt.startswith("/candidates") and "//" not in nxt and "\\" not in nxt and "\n" not in nxt:
+            base, _, query = nxt.partition("?")
+            pairs = [p for p in query.split("&") if p and not p.startswith(("flash=", "err="))]
+            target = base + ("?" + "&".join(pairs) if pairs else "")
+        sep = "&" if "?" in target else "?"
+        return RedirectResponse(f"{target}{sep}flash={quote(message)}{'&err=1' if err else ''}", status_code=303)
+
+    def do(cid: int, fn: Callable, next_url: str = "") -> RedirectResponse:
+        """Run an action on a candidate; show its message or the problem on the page it came from."""
         with db() as session:
             cand = session.get(m.Candidate, cid)
             if cand is None:
@@ -250,14 +262,15 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
             except act.UserError as exc:
                 session.rollback()
                 message, err = str(exc), "&err=1"
-        return RedirectResponse(f"/candidates/{cid}?flash={quote(message)}{err}", status_code=303)
+        return back_to(cid, next_url, message, bool(err))
 
     @app.post("/candidates/{cid}/status")
-    def post_status(cid: int, status_id: int = Form(...), follow_up: str = Form(""), note: str = Form("")):  # noqa: ANN202
+    def post_status(cid: int, status_id: int = Form(...), follow_up: str = Form(""), note: str = Form(""),
+                    next: str = Form("")):  # noqa: ANN202
         def run(session, cand):  # noqa: ANN001, ANN202
             status = act.change_status(session, cand, status_id, follow_up=parse_date(follow_up), note=note)
             return f"הסטטוס עודכן ל\"{status.name}\""
-        return do(cid, run)
+        return do(cid, run, next)
 
     @app.post("/candidates/{cid}/follow-up")
     def post_follow_up(cid: int, follow_up: str = Form(""), clear: str = Form("")):  # noqa: ANN202
@@ -281,12 +294,15 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
         return do(cid, run)
 
     @app.post("/candidates/{cid}/contact")
-    def post_contact(cid: int, direction: str = Form(...), channel: str = Form(...), on: str = Form(""),
-                     text: str = Form(""), advance: str = Form("")):  # noqa: ANN202
+    def post_contact(cid: int, direction: str = Form(...), channel: str = Form("other"), on: str = Form(""),
+                     text: str = Form(""), advance: str = Form(""), next: str = Form("")):  # noqa: ANN202
         def run(session, cand):  # noqa: ANN001, ANN202
+            if direction == "note":
+                act.add_note(session, cand, text, parse_date(on))
+                return "ההערה נוספה ליומן"
             return act.log_contact(session, cand, direction, channel, on=parse_date(on), text=text,
                                    advance=bool(advance))
-        return do(cid, run)
+        return do(cid, run, next)
 
     # ------------------------------------------------------------------ settings
     def settings_redirect(message: str = "", err: bool = False) -> RedirectResponse:
@@ -451,6 +467,16 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
             _ = cand.status
             ctx = {"c": cand, "summary": build_summary(cand)}
         return templates.TemplateResponse(request, "summary.html", ctx)
+
+    @app.get("/candidates/{cid}/summary.txt")
+    def summary_txt(cid: int):  # noqa: ANN202
+        from fastapi.responses import PlainTextResponse
+        with db() as session:
+            cand = session.get(m.Candidate, cid)
+            if cand is None:
+                raise HTTPException(404)
+            _ = cand.status
+            return PlainTextResponse(build_summary(cand), headers={"Cache-Control": "no-store"})
 
     @app.post("/candidates/{cid}/delete")
     def post_delete(cid: int):  # noqa: ANN202

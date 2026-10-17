@@ -1,0 +1,11 @@
+{# Four candidate actions as buttons; the dialogs in _dialogs.html do the work. Used in the list and on the detail page. #}
+{% macro icon(name) %}<svg class="ic" aria-hidden="true" focusable="false"><use href="#i-{{ name }}"/></svg>{% endmacro %}
+{% macro buttons(c, long=False) %}
+{%- set d = 'data-id="%d" data-name="%s" data-show="%d" data-status="%s" data-fu="%s"'|format(c.id, (c.full_name or ('#' ~ c.show_id))|e, c.show_id, c.status_id or '', c.follow_up_date.isoformat() if c.follow_up_date else '') -%}
+<div class="acts{{ ' acts-long' if long }}" role="group" aria-label="פעולות עבור {{ c.full_name }}">
+  <button type="button" class="act" data-act="status" {{ d|safe }} title="עדכון סטטוס">{{ icon('status') }}<span class="t">{{ 'עדכון סטטוס' if long else 'סטטוס' }}</span></button>
+  <button type="button" class="act" data-act="contact" {{ d|safe }} title="תיעוד קשר או הערה">{{ icon('log') }}<span class="t">תיעוד</span></button>
+  <button type="button" class="act" data-act="send" {{ d|safe }} title="שליחת הודעה">{{ icon('send') }}<span class="t">{{ 'שליחת הודעה' if long else 'הודעה' }}</span></button>
+  <button type="button" class="act" data-act="summary" {{ d|safe }} title="סיכום לפעמונים">{{ icon('summary') }}<span class="t">{{ 'סיכום לפעמונים' if long else 'סיכום' }}</span></button>
+</div>
+{% endmacro %}

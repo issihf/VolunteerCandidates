@@ -1,0 +1,65 @@
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-status" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M3 11l18-8-8 18-2-8-8-2z"/></symbol>
+  <symbol id="i-summary" viewBox="0 0 24 24"><path d="M9 4h6v3H9zM7 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-1M9 12h6M9 16h6"/></symbol>
+</svg>
+
+<dialog id="dlg-status" class="dlg" aria-labelledby="dlg-status-t">
+  <form class="stack" method="post">
+    <h2 id="dlg-status-t">עדכון סטטוס · <span class="who"></span></h2>
+    <input type="hidden" name="next">
+    <div class="field"><label for="d-status">סטטוס</label>
+      <select id="d-status" name="status_id">
+        {% for st in statuses %}<option value="{{ st.id }}" data-requires="{{ '1' if st.requires_date }}" data-days="{{ st.follow_up_days or '' }}" data-final="{{ '1' if st.kind == 'final' }}" {{ 'hidden disabled' if not st.enabled }}>{{ st.name }}{{ ' (סיום)' if st.kind == 'final' }}</option>{% endfor %}
+      </select></div>
+    <div class="field"><label for="d-fu">תאריך מעקב <span class="req" hidden>(חובה בסטטוס הזה)</span></label>
+      <input id="d-fu" type="date" name="follow_up" min="{{ today().isoformat() }}">
+      <span class="hint" id="d-fu-hint"></span></div>
+    <div class="field"><label for="d-snote">הערה (לא חובה)</label><input id="d-snote" type="text" name="note"></div>
+    <div class="dlg-actions"><button type="submit">עדכון</button><button type="button" class="secondary" data-close>ביטול</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-contact" class="dlg" aria-labelledby="dlg-contact-t">
+  <form class="stack" method="post">
+    <h2 id="dlg-contact-t">תיעוד · <span class="who"></span></h2>
+    <input type="hidden" name="next">
+    <div class="field"><label for="d-dir">מה לתעד</label>
+      <select id="d-dir" name="direction"><option value="out">פנינו אליו/אליה</option><option value="in">התקבלה תשובה</option><option value="note">הערה חופשית</option></select></div>
+    <div class="field" id="d-ch-wrap"><label for="d-ch">ערוץ</label>
+      <select id="d-ch" name="channel">{% for k, v in channels.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="d-on">תאריך</label><input id="d-on" type="date" name="on" value="{{ today().isoformat() }}" max="{{ today().isoformat() }}"></div>
+    <div class="field"><label for="d-text" id="d-text-l">פרטים (לא חובה)</label><textarea id="d-text" name="text" rows="3"></textarea></div>
+    <label id="d-adv-wrap"><input type="checkbox" name="advance" value="1" checked> לקדם את הסטטוס אוטומטית (פנייה בווטסאפ ← "נשלחה פנייה", תשובה ← "התקבלה תשובה")</label>
+    <div class="dlg-actions"><button type="submit">תיעוד</button><button type="button" class="secondary" data-close>ביטול</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-send" class="dlg" aria-labelledby="dlg-send-t">
+  <div class="stack">
+    <h2 id="dlg-send-t">שליחת הודעה · <span class="who"></span></h2>
+    {% if msg_templates %}
+    <p class="hint">בחירת תבנית פותחת תצוגה מקדימה. שום דבר לא נשלח אוטומטית.</p>
+    <ul class="tpl-pick">
+      {% for t in msg_templates %}<li><a class="button secondary" data-send-link="/send/{{ t.id }}" href="#">{{ t.name }} <span class="tag">{{ 'ווטסאפ' if t.channel == 'whatsapp' else 'מייל' }}</span></a></li>{% endfor %}
+    </ul>
+    {% else %}<p>עוד אין תבניות. אפשר להגדיר אותן ב<a href="/settings">הגדרות</a>.</p>{% endif %}
+    <div class="dlg-actions"><button type="button" class="secondary" data-close>סגירה</button></div>
+  </div>
+</dialog>
+
+<dialog id="dlg-summary" class="dlg dlg-wide" aria-labelledby="dlg-summary-t" data-paamonim="{{ base_url }}">
+  <div class="stack">
+    <h2 id="dlg-summary-t">סיכום לפעמונים · <span class="who"></span></h2>
+    <textarea id="d-sum" rows="9" readonly aria-label="טקסט הסיכום"></textarea>
+    <p class="hint">בפעמונים: "הוספת הערה", הדבקה, ובחירה אם "לעיני כותב ההערה בלבד". המערכת לא כותבת לפעמונים.</p>
+    <p id="d-sum-done" class="done" role="status"></p>
+    <div class="dlg-actions">
+      <button type="button" id="d-sum-open">העתקה ופתיחה בפעמונים</button>
+      <button type="button" id="d-sum-copy" class="secondary">העתקה בלבד</button>
+      <button type="button" class="secondary" data-close>סגירה</button>
+    </div>
+  </div>
+</dialog>
+<script src="/static/actions.js"></script>

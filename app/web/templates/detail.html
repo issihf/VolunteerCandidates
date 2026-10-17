@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_actions.html" as A %}
 {% block title %}{{ c.full_name }} · {{ app_title }}{% endblock %}
 {% block content %}
 <p><a href="/candidates?tab={{ c.state }}">← חזרה לרשימה</a></p>
@@ -8,113 +9,34 @@
   {% if c.follow_up_date %}<span class="{{ 'late' if c.follow_up_date <= today() else 'hint' }}">מעקב: {{ fmt_date(c.follow_up_date) }}</span>{% endif %}
   {% if c.state_reason %}<span class="hint">{{ c.state_reason }}</span>{% endif %}</p>
 
-<section class="panel row">
-  <a class="button" href="{{ base_url }}/contacts/show/{{ c.show_id }}" target="_blank" rel="noopener">פתיחה בפעמונים</a>
-  <form action="/candidates/{{ c.id }}/refetch" method="post"><button type="submit" class="secondary">רענון פרטים מפעמונים</button></form>
-  {% if c.state in ('review', 'failed', 'not_relevant') %}
-    <form action="/candidates/{{ c.id }}/resolve" method="post"><input type="hidden" name="to" value="candidate"><button type="submit">סימון כמועמד</button></form>
-  {% endif %}
-  {% if c.state in ('review', 'candidate') %}
-    <form action="/candidates/{{ c.id }}/resolve" method="post"><input type="hidden" name="to" value="not_relevant"><button type="submit" class="secondary">סימון כלא רלוונטי</button></form>
-  {% endif %}
-</section>
+<div class="detail">
+  <div class="detail-main">
+    <section class="panel">
+      <h2>יומן ({{ journal|length }})</h2>
+      {% if journal %}
+      <ul class="journal">
+        {% for e in journal %}
+        <li>
+          <span class="when">{{ fmt_date(e.occurred_on) }}</span>
+          <span class="what"><b>{{ kind_names[e.kind] }}</b>{% if e.channel %} · {{ channels.get(e.channel, e.channel) }}{% endif %}{% if e.kind == 'status' and e.status %}: {{ e.status.name }}{% endif %}
+            {% if e.text %}<div class="txt">{{ e.text }}</div>{% endif %}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="hint">עוד אין רישומים.</p>{% endif %}
+    </section>
 
-{% if c.state == 'candidate' %}
-<div class="cols">
-  <section class="panel">
-    <h2>שינוי סטטוס</h2>
-    <form class="stack" action="/candidates/{{ c.id }}/status" method="post">
-      <div class="field"><label for="status_id">סטטוס</label>
-        <select id="status_id" name="status_id">
-          {% for st in status_options %}<option value="{{ st.id }}" {{ 'selected' if st.id == c.status_id }}>{{ st.name }}{{ ' (סיום)' if st.kind == 'final' }}</option>{% endfor %}
-        </select></div>
-      <div class="field"><label for="fu">תאריך מעקב (ריק = אוטומטי לפי הסטטוס; חובה ב"יהיה מעוניין בעתיד")</label>
-        <input id="fu" type="date" name="follow_up" min="{{ today().isoformat() }}"></div>
-      <div class="field"><label for="snote">הערה (אופציונלי)</label><input id="snote" type="text" name="note"></div>
-      <div><button type="submit">עדכון סטטוס</button></div>
-    </form>
-    <form class="inline" action="/candidates/{{ c.id }}/follow-up" method="post" style="margin-top:14px">
-      <div class="field"><label for="fu2">שינוי תאריך המעקב בלבד</label>
-        <input id="fu2" type="date" name="follow_up" value="{{ c.follow_up_date.isoformat() if c.follow_up_date }}" min="{{ today().isoformat() }}"></div>
-      <button type="submit" class="secondary">עדכון</button>
-      <button type="submit" name="clear" value="1" class="secondary">ללא מעקב</button>
-    </form>
-  </section>
-
-  <section class="panel">
-    <h2>תיעוד קשר</h2>
-    <form class="stack" action="/candidates/{{ c.id }}/contact" method="post">
-      <div class="inline">
-        <div class="field"><label for="dir">מה קרה</label>
-          <select id="dir" name="direction"><option value="out">פנינו אליו/אליה</option><option value="in">התקבלה תשובה</option></select></div>
-        <div class="field"><label for="ch">ערוץ</label>
-          <select id="ch" name="channel">{% for k, v in channels.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
-        <div class="field"><label for="on">תאריך</label><input id="on" type="date" name="on" value="{{ today().isoformat() }}" max="{{ today().isoformat() }}"></div>
-      </div>
-      <div class="field"><label for="ctext">פרטים (אופציונלי)</label><input id="ctext" type="text" name="text"></div>
-      <label><input type="checkbox" name="advance" value="1" checked> קידום הסטטוס אוטומטית (פנייה בווטסאפ ← "נשלחה פנייה", תשובה ← "התקבלה תשובה")</label>
-      <div><button type="submit">תיעוד</button></div>
-    </form>
-    <form class="stack" action="/candidates/{{ c.id }}/note" method="post" style="margin-top:14px">
-      <div class="field"><label for="ntext">הערה חופשית</label><textarea id="ntext" name="text"></textarea></div>
-      <div><button type="submit" class="secondary">הוספת הערה</button></div>
-    </form>
-  </section>
-</div>
-{% endif %}
-
-<div class="cols">
-  <section class="panel">
-    <h2>שם ומגדר</h2>
-    <form class="stack" action="/candidates/{{ c.id }}/edit" method="post">
-      <div class="inline">
-        <div class="field"><label for="fn">שם פרטי</label><input id="fn" type="text" name="first_name" value="{{ c.first_name }}"></div>
-        <div class="field"><label for="ln">שם משפחה</label><input id="ln" type="text" name="last_name" value="{{ c.last_name }}"></div>
-        <div class="field"><label for="gd">מגדר (קובע את נוסח ההודעות)</label>
-          <select id="gd" name="gender"><option value="">לא נקבע (ניסוח ניטרלי)</option>
-            <option value="male" {{ 'selected' if c.gender == 'male' }}>גבר</option>
-            <option value="female" {{ 'selected' if c.gender == 'female' }}>אישה</option></select></div>
-      </div>
-      <p class="hint">הפיצול לשם פרטי ומשפחה הוא ניחוש לפי השם המלא בפעמונים ("{{ c.full_name }}"). תיקון ידני נשמר גם ברענון.</p>
-      <div><button type="submit" class="secondary">שמירה</button></div>
-    </form>
-  </section>
-
-  <section class="panel">
-    <h2>יומן ({{ journal|length }})</h2>
-    {% if journal %}
-    <ul class="journal">
-      {% for e in journal %}
-      <li>
-        <span class="when">{{ fmt_date(e.occurred_on) }}</span>
-        <span class="what"><b>{{ kind_names[e.kind] }}</b>{% if e.channel %} · {{ channels.get(e.channel, e.channel) }}{% endif %}{% if e.kind == 'status' and e.status %}: {{ e.status.name }}{% endif %}
-          {% if e.text %}<div class="txt">{{ e.text }}</div>{% endif %}</span>
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}<p class="hint">עוד אין רישומים.</p>{% endif %}
-  </section>
-</div>
-
-<section class="panel">
-  <h2>שליחת הודעה</h2>
-  {% if templates %}
-  <p class="hint">בחירת תבנית פותחת תצוגה מקדימה. שום דבר לא נשלח מכאן אוטומטית.</p>
-  <ul class="tpl-list">
-    {% for t in templates %}<li><a class="button secondary" href="/candidates/{{ c.id }}/send/{{ t.id }}">{{ t.name }} · {{ 'ווטסאפ' if t.channel == 'whatsapp' else 'מייל' }}</a></li>{% endfor %}
-  </ul>
-  {% else %}<p class="hint">עוד אין תבניות. אפשר להגדיר אותן ב<a href="/settings">הגדרות</a>.</p>{% endif %}
-</section>
-
-<section class="panel">
-  <h2>סיכום לפעמונים</h2>
-  <p class="hint">טקסט מהיומן להדבקה כהערה בדף האדם בפעמונים. המערכת לא כותבת לשם בעצמה.</p>
-  <a class="button" href="/candidates/{{ c.id }}/summary">הכנת סיכום</a>
-  <form action="/candidates/{{ c.id }}/delete" method="post" class="inline" style="margin-top:12px"
-        onsubmit="return confirm('למחוק את המועמד/ת ואת כל היומן? אי אפשר לשחזר. ייבוא חוזר של הרשימה יוסיף אותו/ה שוב כחדש/ה.')">
-    <button type="submit" class="mini secondary">מחיקת המועמד/ת</button>
-  </form>
-</section>
+    {% if c.state == 'candidate' %}
+    <section class="panel">
+      <h2>תאריך מעקב</h2>
+      <form class="inline" action="/candidates/{{ c.id }}/follow-up" method="post">
+        <div class="field"><label for="fu2">שינוי תאריך המעקב בלבד</label>
+          <input id="fu2" type="date" name="follow_up" value="{{ c.follow_up_date.isoformat() if c.follow_up_date }}" min="{{ today().isoformat() }}"></div>
+        <button type="submit" class="secondary">עדכון</button>
+        <button type="submit" name="clear" value="1" class="secondary">ללא מעקב</button>
+      </form>
+    </section>
+    {% endif %}
 
 <dl class="facts">
   <dt>טלפון נייד</dt><dd dir="ltr">{{ c.display_mobile }}{% if whatsapp %} <a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">ווטסאפ</a>{% endif %}</dd>
@@ -134,4 +56,44 @@
   <dt>תחילת פעילות</dt><dd>{{ fmt_date(c.activity_start) }}</dd>
   <dt>נשלף</dt><dd>{{ c.fetched_at.strftime('%d/%m/%Y %H:%M') if c.fetched_at else 'עדיין לא' }}</dd>
 </dl>
+
+
+    <section class="panel">
+    <h2>שם ומגדר</h2>
+    <form class="stack" action="/candidates/{{ c.id }}/edit" method="post">
+      <div class="inline">
+        <div class="field"><label for="fn">שם פרטי</label><input id="fn" type="text" name="first_name" value="{{ c.first_name }}"></div>
+        <div class="field"><label for="ln">שם משפחה</label><input id="ln" type="text" name="last_name" value="{{ c.last_name }}"></div>
+        <div class="field"><label for="gd">מגדר (קובע את נוסח ההודעות)</label>
+          <select id="gd" name="gender"><option value="">לא נקבע (ניסוח ניטרלי)</option>
+            <option value="male" {{ 'selected' if c.gender == 'male' }}>גבר</option>
+            <option value="female" {{ 'selected' if c.gender == 'female' }}>אישה</option></select></div>
+      </div>
+      <p class="hint">הפיצול לשם פרטי ומשפחה הוא ניחוש לפי השם המלא בפעמונים ("{{ c.full_name }}"). תיקון ידני נשמר גם ברענון.</p>
+      <div><button type="submit" class="secondary">שמירה</button></div>
+    </form>
+  </section>
+
+    <form action="/candidates/{{ c.id }}/delete" method="post" class="inline"
+          onsubmit="return confirm('למחוק את המועמד/ת ואת כל היומן? אי אפשר לשחזר. ייבוא חוזר של הרשימה יוסיף אותו/ה שוב כחדש/ה.')">
+      <button type="submit" class="mini secondary">מחיקת המועמד/ת</button>
+    </form>
+  </div>
+
+  <aside class="rail" aria-label="פעולות">
+    {% if c.state == 'candidate' %}{{ A.buttons(c, long=True) }}{% endif %}
+    <div class="rail-sub">
+      <h2>פעמונים</h2>
+      <a class="button secondary" href="{{ base_url }}/contacts/show/{{ c.show_id }}" target="_blank" rel="noopener">פתיחה בפעמונים</a>
+      <form action="/candidates/{{ c.id }}/refetch" method="post"><button type="submit" class="secondary">רענון פרטים</button></form>
+      {% if c.state in ('review', 'failed', 'not_relevant') %}
+        <form action="/candidates/{{ c.id }}/resolve" method="post"><input type="hidden" name="to" value="candidate"><button type="submit">סימון כמועמד</button></form>
+      {% endif %}
+      {% if c.state in ('review', 'candidate') %}
+        <form action="/candidates/{{ c.id }}/resolve" method="post"><input type="hidden" name="to" value="not_relevant"><button type="submit" class="secondary">סימון כלא רלוונטי</button></form>
+      {% endif %}
+    </div>
+  </aside>
+</div>
+{% if c.state == 'candidate' %}{% include "_dialogs.html" %}{% endif %}
 {% endblock %}
