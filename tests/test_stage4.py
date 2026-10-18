@@ -187,7 +187,7 @@ def test_release_package_is_one_click():
     assert (root / "packaging" / "README-INSTALL.txt").exists()
     build = (root / "build.ps1").read_text()
     assert "Install.cmd" in build and "README-INSTALL.txt" in build
-    workflow = (root / ".github" / "workflows" / "release.yml").read_text()
+    workflow = (root / "packaging" / "release.yml.copy-to-.github-workflows").read_text()  # remote tools cannot write .github; copied there by hand
     assert "Install.cmd" in workflow and "gh release create" in workflow and "windows-latest" in workflow
     ps1 = (root / "install.ps1").read_bytes()
     assert ps1.startswith(b"\xef\xbb\xbf")  # Hebrew shortcut name needs the BOM in Windows PowerShell 5.1
