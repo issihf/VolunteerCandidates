@@ -11,6 +11,8 @@ Remove-Item -Recurse -Force ".\build", ".\dist\VolunteerCandidates" -ErrorAction
 & ".\.venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean ".\packaging\volunteercandidates.spec"
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed." }
 $version = (& ".\.venv\Scripts\python.exe" -c "import app; print(app.__version__)").Trim()
+# The installer travels inside the zip, so unzip + double-click Install.cmd is all the user does.
+Copy-Item ".\install.ps1", ".\packaging\Install.cmd", ".\packaging\README-INSTALL.txt" ".\dist\VolunteerCandidates\"
 $zip = ".\dist\VolunteerCandidates-$version.zip"
 Remove-Item $zip -ErrorAction SilentlyContinue
 Compress-Archive -Path ".\dist\VolunteerCandidates\*" -DestinationPath $zip

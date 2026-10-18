@@ -42,5 +42,6 @@ exe = EXE(  # noqa: F821
     console=False,  # an application window, no black console
     disable_windowed_traceback=False,
     upx=False,  # UPX-packed files are flagged by antivirus more often
+    icon=str(ROOT / "packaging" / "icon.ico"),  # blue bell with people; the shortcuts show it too
 )
 coll = COLLECT(exe, a.binaries, a.datas, name="VolunteerCandidates", upx=False)  # noqa: F821

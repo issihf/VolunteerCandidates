@@ -109,3 +109,5 @@ a.button.secondary { background:transparent; color:var(--brand); border:1px soli
 @media (max-width:860px) { .hide-s { display:none; } }
 input[type=file] { max-width:100%; }
 .filters input[type=search] { flex:1 1 200px; min-width:0; }
+.login-icon { display:block; margin:0 auto 12px; }
+.login-icon ~ h1 { text-align:center; }

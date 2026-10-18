@@ -1,0 +1,42 @@
+# Builds the Windows program and publishes the zip on the repository's Releases page.
+#   git tag v0.5.1 && git push origin v0.5.1       (or run it by hand from the Actions tab: the zip is kept as an artifact)
+name: release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install packages
+        run: python -m pip install -r requirements-dev.txt
+      - name: Tests
+        run: python -m pytest -q
+      - name: Build
+        run: python -m PyInstaller --noconfirm --clean packaging/volunteercandidates.spec
+      - name: Package
+        shell: pwsh
+        run: |
+          Copy-Item install.ps1, packaging\Install.cmd, packaging\README-INSTALL.txt dist\VolunteerCandidates\
+          $v = (python -c "import app; print(app.__version__)").Trim()
+          Compress-Archive -Path dist\VolunteerCandidates\* -DestinationPath "VolunteerCandidates-$v.zip"
+          "ZIP=VolunteerCandidates-$v.zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VolunteerCandidates
+          path: ${{ env.ZIP }}
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" "${{ env.ZIP }}" --title "${{ github.ref_name }}" --notes "Unzip, double-click Install.cmd. See README-INSTALL.txt inside."

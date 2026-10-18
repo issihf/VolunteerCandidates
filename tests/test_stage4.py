@@ -177,3 +177,36 @@ def test_powershell_scripts_survive_windows_powershell():
         raw = script.read_bytes()
         if any(b > 127 for b in raw):
             assert raw.startswith(b"\xef\xbb\xbf"), f"{script.name} has Hebrew but no UTF-8 BOM"
+
+
+def test_release_package_is_one_click():
+    from pathlib import Path
+    root = Path(__file__).parent.parent
+    cmd = (root / "packaging" / "Install.cmd").read_text()
+    assert "install.ps1" in cmd and "ExecutionPolicy Bypass" in cmd
+    assert (root / "packaging" / "README-INSTALL.txt").exists()
+    build = (root / "build.ps1").read_text()
+    assert "Install.cmd" in build and "README-INSTALL.txt" in build
+    workflow = (root / ".github" / "workflows" / "release.yml").read_text()
+    assert "Install.cmd" in workflow and "gh release create" in workflow and "windows-latest" in workflow
+    ps1 = (root / "install.ps1").read_bytes()
+    assert ps1.startswith(b"\xef\xbb\xbf")  # Hebrew shortcut name needs the BOM in Windows PowerShell 5.1
+
+
+def test_icon_is_wired_in():
+    from pathlib import Path
+    root = Path(__file__).parent.parent
+    ico = (root / "packaging" / "icon.ico").read_bytes()
+    assert ico[:4] == b"\x00\x00\x01\x00" and int.from_bytes(ico[4:6], "little") >= 6  # several sizes
+    assert 'icon=str(ROOT / "packaging" / "icon.ico")' in (root / "packaging" / "volunteercandidates.spec").read_text()
+    assert (root / "app" / "web" / "static" / "icon.svg").read_text().startswith("<svg")
+
+
+def test_login_pages_show_the_icon(engine):
+    app = create_app(engine=engine, require_password=True)
+    with TestClient(app, follow_redirects=False) as c:
+        assert "/static/icon.svg" in c.get("/setup").text
+        c.post("/setup", data={"password": "good-password-1", "again": "good-password-1"})
+        c.post("/lock")
+        assert "/static/icon.svg" in c.get("/login").text
+        assert c.get("/static/icon.svg").status_code == 200
