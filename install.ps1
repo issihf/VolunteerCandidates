@@ -32,21 +32,27 @@ Get-ChildItem -Recurse -File $target | Unblock-File -ErrorAction SilentlyContinu
 $shell = New-Object -ComObject WScript.Shell
 $hebrewName = "מועמדים למלווים.lnk"
 function New-Shortcut([string]$folder) {
-    # WScript.Shell cannot save a shortcut with a Hebrew file name: save it in English, then rename.
-    $english = Join-Path $folder "VolunteerCandidates.lnk"
-    $hebrew = Join-Path $folder $hebrewName
-    Remove-Item $english, $hebrew -ErrorAction SilentlyContinue
-    $link = $shell.CreateShortcut($english)
+    # WScript.Shell fails on any path with Hebrew letters (the Desktop folder under OneDrive is one):
+    # build the shortcut in the temp folder under an English name, then copy it to its place.
+    $temp = Join-Path $env:TEMP "VolunteerCandidates-shortcut.lnk"
+    Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue
+    $link = $shell.CreateShortcut($temp)
     $link.TargetPath = Join-Path $target "VolunteerCandidates.exe"
     $link.WorkingDirectory = $target
     $link.IconLocation = (Join-Path $target "VolunteerCandidates.exe") + ",0"
     $link.Description = "Volunteer candidates - Paamonim Jerusalem"
     $link.Save()
-    try { Rename-Item -LiteralPath $english -NewName $hebrewName -ErrorAction Stop; return $hebrew } catch { return $english }
+    $dest = Join-Path $folder $hebrewName
+    Copy-Item -LiteralPath $temp -Destination $dest -Force
+    Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue
+    return $dest
+}
+function Try-Shortcut([string]$folder) {
+    try { return New-Shortcut $folder } catch { Write-Warning "Could not create a shortcut in $folder ($($_.Exception.Message))"; return "(not created)" }
 }
 $menu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
-$startLink = New-Shortcut $menu
-$deskLink = New-Shortcut ([Environment]::GetFolderPath("Desktop"))
+$startLink = Try-Shortcut $menu
+$deskLink = Try-Shortcut ([Environment]::GetFolderPath("Desktop"))
 Write-Host "Installed in $target."
 Write-Host "Shortcuts: $startLink"
 Write-Host "           $deskLink"
