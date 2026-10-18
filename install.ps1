@@ -10,7 +10,7 @@ if (-not $From) {
     if (Test-Path (Join-Path $PSScriptRoot "VolunteerCandidates.exe")) { $From = $PSScriptRoot }
     else { $From = Join-Path $PSScriptRoot "dist\VolunteerCandidates" }
 }
-$From = (Resolve-Path $From).Path.TrimEnd("\")
+$From = (Resolve-Path $From.Trim([char]34)).Path.TrimEnd("\")
 $exe = Join-Path $From "VolunteerCandidates.exe"
 if (-not (Test-Path $exe)) { throw "Not found: $exe. Unzip the whole release first (do not run from inside the zip)." }
 if (Get-Process -Name "VolunteerCandidates" -ErrorAction SilentlyContinue) {

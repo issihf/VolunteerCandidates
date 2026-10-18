@@ -184,6 +184,7 @@ def test_release_package_is_one_click():
     root = Path(__file__).parent.parent
     cmd = (root / "packaging" / "Install.cmd").read_text()
     assert "install.ps1" in cmd and "ExecutionPolicy Bypass" in cmd
+    assert "-From" not in cmd  # "%~dp0" ends with a backslash, so \" swallows the closing quote and Resolve-Path fails
     assert (root / "packaging" / "README-INSTALL.txt").exists()
     build = (root / "build.ps1").read_text()
     assert "Install.cmd" in build and "README-INSTALL.txt" in build
