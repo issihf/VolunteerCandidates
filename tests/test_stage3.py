@@ -275,3 +275,14 @@ def test_summary_txt(env):
     r = env.get(f"/candidates/{env.cand}/summary.txt")
     assert r.status_code == 200 and "סיכום קשר" in r.text and r.headers["cache-control"] == "no-store"
     assert env.get("/candidates/99999/summary.txt").status_code == 404
+
+
+def test_whatsapp_link_copies_the_name(env):
+    add_tpl(env)
+    env.post("/settings/messaging", data=dict(sender_name="איסי", link_style="api"))
+    page = env.get(f"/candidates/{env.cand}/send/{tid(env)}").text
+    assert "data-copy-name=" in page and "copy-note" in page and "/static/copyname.js" in page
+    detail = env.get(f"/candidates/{env.cand}").text
+    assert "data-copy-name=" not in detail or "wa.me" in detail  # detail link carries the name when a number exists
+    js = env.get("/static/copyname.js")
+    assert js.status_code == 200 and "navigator.clipboard" in js.text and "execCommand" in js.text

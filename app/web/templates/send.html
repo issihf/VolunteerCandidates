@@ -21,13 +21,14 @@
   <div class="actions">
     {% if not problem %}
       {% if t.channel == 'whatsapp' %}
-        <a class="button" href="{{ link }}" target="_blank" rel="noopener">פתיחה בווטסאפ</a>
+        <a class="button" href="{{ link }}" target="_blank" rel="noopener" data-copy-name="{{ c.full_name }}">פתיחה בווטסאפ</a>
       {% elif drafter_ok %}
         <form action="/candidates/{{ c.id }}/send/{{ t.id }}/draft" method="post" class="inline"><input type="hidden" name="v" value="{{ variant }}"><button type="submit">פתיחת טיוטה ב-Outlook</button></form>
       {% else %}<span class="hint">Outlook לא זמין כאן. אפשר להעתיק ולשלוח ידנית.</span>{% endif %}
       <button type="button" class="secondary" onclick="navigator.clipboard.writeText(document.getElementById('msg').value)">העתקת הטקסט</button>
     {% endif %}
   </div>
+  {% if t.channel == 'whatsapp' and not problem %}<p class="hint copy-note" role="status" aria-live="polite">בלחיצה על "פתיחה בווטסאפ" יועתק גם שם המועמד/ת ללוח, כדי להדביק אותו כשם איש הקשר.</p>{% endif %}
 </section>
 
 {% if not problem %}

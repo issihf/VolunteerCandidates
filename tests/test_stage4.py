@@ -213,3 +213,18 @@ def test_login_pages_show_the_icon(engine):
         c.post("/lock")
         assert "/static/icon.svg" in c.get("/login").text
         assert c.get("/static/icon.svg").status_code == 200
+
+
+def test_release_package_carries_no_data():
+    """The zip is built from the repo plus templates and static files only: no database, no import files, no browser profile."""
+    from pathlib import Path
+    import subprocess
+    root = Path(__file__).parent.parent
+    spec = (root / "packaging" / "volunteercandidates.spec").read_text(encoding="utf-8")
+    assert spec.count("datas = [") == 1 and "tests" not in spec.split("datas = [")[1].split("]")[0]
+    gitignore = (root / ".gitignore").read_text(encoding="utf-8")
+    for pattern in ("*.db", "data/", "browser-profile/", "*.xls", "*.csv", "*.oft"):
+        assert pattern in gitignore
+    for script in ("build.ps1", "packaging/release.yml.copy-to-.github-workflows"):
+        assert "check-package" in (root / script).read_text(encoding="utf-8")
+    assert (root / "packaging" / "check-package.ps1").exists()
