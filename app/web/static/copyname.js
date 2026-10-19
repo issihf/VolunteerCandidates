@@ -27,13 +27,16 @@
     if (!el) return;
     var name = el.getAttribute("data-copy-name");
     var out = note(el);
-    var tab = el.getAttribute("data-tab");
-    if (tab && el.href) {
-      // One named WhatsApp tab, reused for every message, instead of a new tab each time.
+    var open = el.getAttribute("data-open");
+    if (open) {
+      // The server opens WhatsApp in the person's own browser or WhatsApp app: a link followed inside
+      // the app window would take over its screen. If that fails, the plain link still works.
       e.preventDefault();
-      var win = window.open(el.href, tab);
-      if (win) { try { win.opener = null; } catch (err) { /* already detached */ } try { win.focus(); } catch (err) { /* ignore */ } }
-      else { window.location.href = el.href; }
+      var body = new URLSearchParams();
+      if (el.getAttribute("data-variant")) body.set("v", el.getAttribute("data-variant"));
+      fetch(open, { method: "POST", body: body, credentials: "same-origin" }).then(function (r) {
+        if (!r.ok) throw new Error("open failed");
+      }).catch(function () { window.open(el.href, "_blank"); });
     }
     copy(name).then(function (ok) {
       if (!out) return;

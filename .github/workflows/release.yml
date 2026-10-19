@@ -1,5 +1,5 @@
 # Builds the Windows program and publishes the zip on the repository's Releases page.
-#   git tag v0.5.5 && git push origin v0.5.5       (or run it by hand from the Actions tab: the zip is kept as an artifact)
+#   git tag v0.5.6 && git push origin v0.5.6       (or run it by hand from the Actions tab: the zip is kept as an artifact)
 name: release
 on:
   push:

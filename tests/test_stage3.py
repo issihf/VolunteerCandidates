@@ -71,12 +71,14 @@ def test_template_validation(session):
 @pytest.fixture()
 def env(engine):
     drafter = FakeDrafter()
-    app = create_app(engine=engine, fetcher_factory=lambda: FakeFetcher(pages()), drafter=drafter)
+    opened: list[str] = []
+    app = create_app(engine=engine, fetcher_factory=lambda: FakeFetcher(pages()), drafter=drafter, opener=opened.append)
     with TestClient(app, follow_redirects=False) as c:
         upload(c)
         c.post("/fetch")
         app.state.job.wait(10)
         c.drafter = drafter
+        c.opened = opened
         with app.state.sessions() as s:
             c.cand = s.scalars(select(m.Candidate).where(m.Candidate.show_id == 1004)).one().id
         yield c
@@ -284,6 +286,32 @@ def test_whatsapp_link_copies_the_name(env):
     assert "data-copy-name=" in page and "copy-note" in page and "/static/copyname.js" in page
     detail = env.get(f"/candidates/{env.cand}").text
     assert "data-copy-name=" not in detail or "wa.me" in detail  # detail link carries the name when a number exists
-    assert 'target="vc-whatsapp"' in page and 'rel="noopener"' not in page.split("data-tab")[0].split("<a ")[-1]  # one reused tab
+    assert f'data-open="/candidates/{env.cand}/send/{tid(env)}/open"' in page  # the server opens WhatsApp, not the app window
     js = env.get("/static/copyname.js")
     assert js.status_code == 200 and "navigator.clipboard" in js.text and "execCommand" in js.text
+
+
+def test_server_opens_whatsapp_outside_the_app_window(env):
+    add_tpl(env)
+    t = tid(env)
+    # no sender name yet: refused, nothing opened
+    assert env.post(f"/candidates/{env.cand}/send/{t}/open", data={"v": "neutral"}).status_code == 400
+    assert env.opened == []
+    env.post("/settings/messaging", data=dict(sender_name="איסי", link_style="api"))
+    r = env.post(f"/candidates/{env.cand}/send/{t}/open", data={"v": "neutral"})
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert len(env.opened) == 1 and env.opened[0].startswith("https://api.whatsapp.com/send?phone=972")
+    # an empty chat from the link next to the number
+    assert env.post(f"/candidates/{env.cand}/whatsapp").status_code == 200
+    assert env.opened[-1].startswith("https://wa.me/972")
+    # email templates never open anything
+    add_tpl(env, name="מייל", channel="email", subject="נושא")
+    n = len(env.opened)
+    assert env.post(f"/candidates/{env.cand}/send/{tid(env)}/open").status_code == 400 and len(env.opened) == n
+
+
+def test_external_opener_only_allows_whatsapp():
+    from app.web.external import is_allowed
+    assert is_allowed("https://api.whatsapp.com/send?phone=972501234567&text=x")
+    assert is_allowed("https://wa.me/972501234567") and is_allowed("whatsapp://send?phone=1")
+    assert not is_allowed("https://evil.example/") and not is_allowed("file:///c:/windows/system32/calc.exe")

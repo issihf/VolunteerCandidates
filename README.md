@@ -3,7 +3,7 @@
 ניהול פניות למתנדבים בפוטנציה (מלווים) בפעמונים. מקומי, משתמשת יחידה. מפרט: `claude/spec-volunteer-spinoff-16-10.md` בפרויקט Claude.
 
 ## הפצה למשתמשת (בלי Python ובלי התקנות)
-1. מפתח: `git tag v0.5.5 && git push origin v0.5.5`. GitHub Actions (Windows) מריץ בדיקות, בונה ב-PyInstaller (Python כלול בתוך התוכנה) ומפרסם `VolunteerCandidates-<גרסה>.zip` ב-Releases.
+1. מפתח: `git tag v0.5.6 && git push origin v0.5.6`. GitHub Actions (Windows) מריץ בדיקות, בונה ב-PyInstaller (Python כלול בתוך התוכנה) ומפרסם `VolunteerCandidates-<גרסה>.zip` ב-Releases.
 2. משתמשת: מורידה את ה-zip מעמוד Releases (בריפו פרטי צריך חשבון GitHub עם גישה), מחלצת, ולוחצת פעמיים על `Install.cmd`. נוצרים קיצורים והתוכנה נפתחת. עדכון: אותו דבר עם zip חדש, הנתונים נשמרים.
 3. לא חתום דיגיטלית: Windows יציג "Windows protected your PC" בהפעלה הראשונה (More info > Run anyway). חתימה (תעודת Code Signing) מסירה את האזהרה.
 4. בנייה מקומית: `.\build.ps1` יוצר את אותו zip ב-`dist`.

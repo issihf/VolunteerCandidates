@@ -31,6 +31,7 @@ from app.messaging.outlook import Drafter, MailError, default_drafter
 from app.importer.list_import import import_list
 from app.storage import models as m
 from app.storage.db import get_default_follow_up_days, init_db, make_engine, session_factory
+from app.web.external import open_external
 from app.web.jobs import FetchJob
 
 HERE = Path(__file__).parent
@@ -46,7 +47,8 @@ COOKIE = "vc_key"
 
 
 def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: str | None = None,
-               drafter: Drafter | None = None, require_password: bool = False) -> FastAPI:
+               drafter: Drafter | None = None, require_password: bool = False,
+               opener: Callable[[str], None] | None = None) -> FastAPI:
     engine = engine or make_engine()
     init_db(engine)
     sessions = session_factory(engine)
@@ -60,6 +62,7 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
     app.state.job = FetchJob(sessions, fetcher_factory)
     app.state.token = token
     app.state.drafter = drafter or default_drafter()
+    app.state.opener = opener or open_external
     app.state.lock = auth.Lock()
     app.state.require_password = require_password
     log = logging.getLogger(__name__)
@@ -425,6 +428,39 @@ def create_app(*, engine=None, fetcher_factory: Callable | None = None, token: s
             ctx = prepare(session, cand, tpl, v)
             ctx.update(flash=flash, err=bool(err), channels=m.CHANNELS, drafter_ok=app.state.drafter.available)
         return templates.TemplateResponse(request, "send.html", ctx)
+
+    @app.post("/candidates/{cid}/send/{tid}/open")
+    def send_open(cid: int, tid: int, v: str = Form("")):  # noqa: ANN202
+        """Open the filled-in WhatsApp message in the default program (not inside the app window)."""
+        with db() as session:
+            cand, tpl = load_pair(session, cid, tid)
+            ctx = prepare(session, cand, tpl, v)
+        if ctx["problem"] or tpl.channel != "whatsapp" or not ctx["link"]:
+            return JSONResponse({"ok": False, "error": ctx["problem"] or "התבנית אינה תבנית ווטסאפ"}, status_code=400)
+        try:
+            app.state.opener(ctx["link"])
+        except Exception:  # noqa: BLE001
+            log.warning("could not open WhatsApp", exc_info=True)
+            return JSONResponse({"ok": False, "error": "לא הצלחתי לפתוח את ווטסאפ"}, status_code=500)
+        return {"ok": True}
+
+    @app.post("/candidates/{cid}/whatsapp")
+    def open_whatsapp_chat(cid: int):  # noqa: ANN202
+        """Open an empty WhatsApp chat with the candidate (the link next to the mobile number)."""
+        with db() as session:
+            cand = session.get(m.Candidate, cid)
+            if cand is None:
+                raise HTTPException(404, "המועמד לא נמצא")
+            number = best_whatsapp_number(cand.phone_mobile, cand.list_mobile, cand.phone_work, cand.phone_work_direct,
+                                          cand.phone_home)
+        if not number:
+            return JSONResponse({"ok": False, "error": "אין מספר נייד"}, status_code=400)
+        try:
+            app.state.opener(f"https://wa.me/{number}")
+        except Exception:  # noqa: BLE001
+            log.warning("could not open WhatsApp", exc_info=True)
+            return JSONResponse({"ok": False, "error": "לא הצלחתי לפתוח את ווטסאפ"}, status_code=500)
+        return {"ok": True}
 
     @app.post("/candidates/{cid}/send/{tid}/draft")
     def send_draft(cid: int, tid: int, v: str = Form("")):  # noqa: ANN202
