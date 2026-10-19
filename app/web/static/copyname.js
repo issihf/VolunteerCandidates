@@ -27,7 +27,14 @@
     if (!el) return;
     var name = el.getAttribute("data-copy-name");
     var out = note(el);
-    // No preventDefault: the link still opens WhatsApp in the same click.
+    var tab = el.getAttribute("data-tab");
+    if (tab && el.href) {
+      // One named WhatsApp tab, reused for every message, instead of a new tab each time.
+      e.preventDefault();
+      var win = window.open(el.href, tab);
+      if (win) { try { win.opener = null; } catch (err) { /* already detached */ } try { win.focus(); } catch (err) { /* ignore */ } }
+      else { window.location.href = el.href; }
+    }
     copy(name).then(function (ok) {
       if (!out) return;
       out.textContent = ok ? "השם הועתק: " + name + ". אפשר להדביק אותו כשם איש הקשר." : "לא הצלחתי להעתיק את השם. אפשר להעתיק ידנית: " + name;

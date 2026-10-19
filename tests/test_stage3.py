@@ -284,5 +284,6 @@ def test_whatsapp_link_copies_the_name(env):
     assert "data-copy-name=" in page and "copy-note" in page and "/static/copyname.js" in page
     detail = env.get(f"/candidates/{env.cand}").text
     assert "data-copy-name=" not in detail or "wa.me" in detail  # detail link carries the name when a number exists
+    assert 'target="vc-whatsapp"' in page and 'rel="noopener"' not in page.split("data-tab")[0].split("<a ")[-1]  # one reused tab
     js = env.get("/static/copyname.js")
     assert js.status_code == 200 and "navigator.clipboard" in js.text and "execCommand" in js.text

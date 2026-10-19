@@ -21,7 +21,7 @@
   <div class="actions">
     {% if not problem %}
       {% if t.channel == 'whatsapp' %}
-        <a class="button" href="{{ link }}" target="_blank" rel="noopener" data-copy-name="{{ c.full_name }}">פתיחה בווטסאפ</a>
+        <a class="button" href="{{ link }}" target="vc-whatsapp" data-tab="vc-whatsapp" data-copy-name="{{ c.full_name }}">פתיחה בווטסאפ</a>
       {% elif drafter_ok %}
         <form action="/candidates/{{ c.id }}/send/{{ t.id }}/draft" method="post" class="inline"><input type="hidden" name="v" value="{{ variant }}"><button type="submit">פתיחת טיוטה ב-Outlook</button></form>
       {% else %}<span class="hint">Outlook לא זמין כאן. אפשר להעתיק ולשלוח ידנית.</span>{% endif %}

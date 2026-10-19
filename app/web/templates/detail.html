@@ -39,7 +39,7 @@
     {% endif %}
 
 <dl class="facts">
-  <dt>טלפון נייד</dt><dd dir="ltr">{{ c.display_mobile }}{% if whatsapp %} <a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener" data-copy-name="{{ c.full_name }}">ווטסאפ</a> <span class="hint copy-note" role="status" aria-live="polite"></span>{% endif %}</dd>
+  <dt>טלפון נייד</dt><dd dir="ltr">{{ c.display_mobile }}{% if whatsapp %} <a href="https://wa.me/{{ whatsapp }}" target="vc-whatsapp" data-tab="vc-whatsapp" data-copy-name="{{ c.full_name }}">ווטסאפ</a> <span class="hint copy-note" role="status" aria-live="polite"></span>{% endif %}</dd>
   <dt>טלפון עבודה</dt><dd dir="ltr">{{ c.phone_work }}</dd>
   <dt>טלפון עבודה ישיר</dt><dd dir="ltr">{{ c.phone_work_direct }}</dd>
   <dt>טלפון בית</dt><dd dir="ltr">{{ c.phone_home }}</dd>

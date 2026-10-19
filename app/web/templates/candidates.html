@@ -23,7 +23,7 @@
       <form action="/fetch" method="post"><button type="submit" {% if not pending %}disabled{% endif %}>שליפת פרטים ({{ pending }} ממתינים)</button></form>
       {% if job.finished %}
         <span class="done">
-          {% if job.error %}שגיאה: {{ job.error }}{% elif job.stopped == 'login' %}נעצר: לא בוצעה התחברות לפעמונים{% elif job.stopped == 'user' %}נעצר לבקשתך{% else %}הסתיים{% endif %}
+          {% if job.error %}שגיאה: {{ job.error }}{% elif job.stopped == 'login' %}נעצר: לא בוצעה התחברות לפעמונים. לחצו שוב על השליפה, התחברו בחלון שנפתח והשאירו אותו פתוח עד הסיום{% elif job.stopped == 'user' %}נעצר לבקשתך{% else %}הסתיים{% endif %}
           — מועמדים {{ job.candidate }}, לא רלוונטי {{ job.not_relevant }}, לבדיקה {{ job.review }}, נכשלו {{ job.failed }}
         </span>
       {% endif %}
